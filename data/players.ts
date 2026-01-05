@@ -14,4 +14,5 @@ export const players: Player[] = [
   { id: "6", name: "강수진", position: "MF", isExecutive: false },
   { id: "7", name: "윤성호", position: "DF", isExecutive: false },
   { id: "8", name: "오정우", position: "MF", isExecutive: false },
+  { id: "9", name: "전수효", position: "FW", isExecutive: false },
 ];
