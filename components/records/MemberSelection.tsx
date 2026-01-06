@@ -1,10 +1,18 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { Player } from "@/data/players";
+
+/**
+ * 회원 정보 인터페이스 (API 응답 변환 후)
+ */
+interface LocalPlayer {
+  id: string;
+  name: string;
+  position: string;
+}
 
 interface MemberSelectionProps {
-  members: Player[];
+  members: LocalPlayer[];
   selectedMembers: Set<string>;
   registeredPlayerNames: string[];
   onMemberToggle: (memberId: string, memberName: string, memberPosition: string) => void;
@@ -28,16 +36,13 @@ export default function MemberSelection({
   const [searchQuery, setSearchQuery] = useState("");
   const registeredSet = new Set(registeredPlayerNames);
 
-  // 검색어로 필터링된 회원 목록
+  // 검색어로 필터링된 회원 목록 (이름만 검색)
   const filteredMembers = useMemo(() => {
     if (!searchQuery.trim()) {
       return members;
     }
     const query = searchQuery.toLowerCase().trim();
-    return members.filter(
-      (member) =>
-        member.name.toLowerCase().includes(query) || member.position.toLowerCase().includes(query)
-    );
+    return members.filter((member) => member.name.toLowerCase().includes(query));
   }, [members, searchQuery]);
 
   return (
@@ -58,7 +63,7 @@ export default function MemberSelection({
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="이름 또는 포지션으로 검색..."
+          placeholder="이름으로 검색..."
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
         />
       </div>
@@ -84,7 +89,7 @@ export default function MemberSelection({
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                   />
                   <span className="text-sm text-gray-700">
-                    {member.name} ({member.position})
+                    {member.name}
                   </span>
                 </label>
               );

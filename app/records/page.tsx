@@ -11,8 +11,9 @@ import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { days } from "@/data/days";
 import { TeamInfo, ViewMode, MatchScore } from "@/types/records";
 import * as recordsService from "@/services/recordsService";
-import { TeamResponse, MatchResponse } from "@/types/api";
+import { TeamResponse, MatchResponse, Player } from "@/types/api";
 import { ApiError } from "@/lib/api";
+import { getPlayers } from "@/services/playersService";
 
 /**
  * 기록지 페이지
@@ -165,12 +166,45 @@ export default function RecordsPage() {
 
       setIsLoading(true);
       try {
-        // API로 팀 추가
-        const response = await recordsService.createTeam({
-          dateId: selectedDateId,
-          teamName,
-          players,
+        // 1. 선수 목록을 API에서 가져와서 이름으로 playerId 찾기
+        const apiPlayers = await getPlayers();
+        const playerMap = new Map<string, number>();
+        apiPlayers.forEach((player: Player) => {
+          playerMap.set(player.name, player.id);
         });
+
+        // 2. 날짜 정보 가져오기 및 ISO 문자열로 변환
+        const selectedDay = days.find((d) => d.id === selectedDateId);
+        if (!selectedDay) {
+          throw new Error("선택한 날짜를 찾을 수 없습니다.");
+        }
+
+        // 날짜 문자열에서 날짜 추출 (예: "2026년 1월 3일 (토)" -> "2026-01-03")
+        const dateMatch = selectedDay.day.match(/(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/);
+        if (!dateMatch) {
+          throw new Error("날짜 형식을 파싱할 수 없습니다.");
+        }
+        const [, year, month, day] = dateMatch;
+        const dateString = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+        const joinedAt = new Date(dateString).toISOString();
+
+        // 3. 팀 생성 API 호출 (POST /teams)
+        const teamResponse = await recordsService.createTeamOnly(teamName);
+        const teamId = teamResponse.id;
+        if (!teamId || isNaN(teamId)) {
+          throw new Error("팀 생성 후 유효한 teamId를 받지 못했습니다.");
+        }
+
+        // 4. 각 선수마다 개별 POST 요청 (Promise.all 사용)
+        const playerRegistrationPromises = players.map(async (player) => {
+          const playerId = playerMap.get(player.name);
+          if (!playerId) {
+            throw new Error(`선수 "${player.name}"의 ID를 찾을 수 없습니다.`);
+          }
+          return recordsService.addPlayerToTeam(teamId, playerId, joinedAt);
+        });
+
+        await Promise.all(playerRegistrationPromises);
 
         // 상태 업데이트
         setTeamsByDate((prev) => ({
@@ -183,7 +217,7 @@ export default function RecordsPage() {
           ...prev,
           [selectedDateId]: {
             ...(prev[selectedDateId] || {}),
-            [teamName]: response.id,
+            [teamName]: teamResponse.id,
           },
         }));
 

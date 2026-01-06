@@ -5,7 +5,7 @@
  */
 
 // 환경변수 로드 확인
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://jochukback-production.up.railway.app";
 
 // 환경변수 로드 상태 로깅 (항상 표시하여 문제 진단 용이)
 if (typeof window === "undefined") {
@@ -103,13 +103,24 @@ async function apiRequest<T>(endpoint: string, options: RequestOptions = {}): Pr
     ...fetchOptions.headers,
   };
 
+  // CORS 설정: 백엔드에 CORS가 설정되어 있으므로 명시적으로 CORS 모드 사용
+  // credentials는 필요에 따라 'include'로 변경 가능 (쿠키/인증 정보 전송 시)
+  const fetchConfig: RequestInit = {
+    ...fetchOptions,
+    headers,
+    mode: "cors", // CORS 모드 명시적 설정
+    credentials: "omit", // 기본값: 쿠키/인증 정보 전송 안 함 (필요시 'include'로 변경)
+  };
+
   // 디버깅: API 호출 로그
   console.log("[API Request]", {
-    method: fetchOptions.method || "GET",
+    method: fetchConfig.method || "GET",
     endpoint,
     baseUrl: API_BASE_URL,
     fullUrl: url,
-    hasBody: !!fetchOptions.body,
+    hasBody: !!fetchConfig.body,
+    mode: fetchConfig.mode,
+    credentials: fetchConfig.credentials,
     headers: Object.keys(headers),
   });
 
@@ -117,10 +128,7 @@ async function apiRequest<T>(endpoint: string, options: RequestOptions = {}): Pr
 
   try {
     // fetch 호출 (네트워크/CORS 에러는 여기서 발생)
-    response = await fetch(url, {
-      ...fetchOptions,
-      headers,
-    });
+    response = await fetch(url, fetchConfig);
 
     // 디버깅: API 응답 로그
     console.log("[API Response]", {
@@ -136,6 +144,24 @@ async function apiRequest<T>(endpoint: string, options: RequestOptions = {}): Pr
     const isJson = contentType.includes("application/json");
     const isHtml = contentType.includes("text/html");
     const isNoContent = response.status === 204 || response.status === 205;
+
+    // 성공 응답(2xx)에서도 Content-Type 검증 (JSON이 아니면 에러)
+    if (response.ok && !isNoContent && !isJson) {
+      const errorMessage =
+        `❌ 서버가 JSON이 아닌 응답을 반환했습니다!\n\n` +
+        `요청 URL: ${url}\n` +
+        `Content-Type: ${contentType || "(없음)"}\n` +
+        `예상: application/json\n` +
+        `실제: ${contentType || "text/html 또는 기타"}\n\n` +
+        `이는 잘못된 API 엔드포인트를 호출했거나 Next.js 서버를 호출한 것입니다.`;
+      console.error("[API Request] Non-JSON Response Detected:", {
+        url,
+        status: response.status,
+        contentType,
+        apiBaseUrl: API_BASE_URL,
+      });
+      throw new ApiError(errorMessage, "server", response.status, url);
+    }
 
     // HTML 응답 감지 (잘못된 엔드포인트 호출 시)
     if (isHtml && !response.ok) {
@@ -221,7 +247,18 @@ async function apiRequest<T>(endpoint: string, options: RequestOptions = {}): Pr
 
               // 파싱된 객체에서 에러 메시지 추출 (여러 필드 시도)
               if (parsedErrorData && typeof parsedErrorData === "object") {
-                errorMessage = parsedErrorData.message || parsedErrorData.error || parsedErrorData.detail || parsedErrorData.errorMessage || parsedErrorData.msg || defaultMessage;
+                // 여러 필드에서 에러 메시지 찾기 (문자열로 변환)
+                const possibleMessage = parsedErrorData.message || parsedErrorData.error || parsedErrorData.detail || parsedErrorData.errorMessage || parsedErrorData.msg;
+
+                // 찾은 메시지가 문자열이면 사용, 아니면 기본 메시지 사용
+                if (possibleMessage && typeof possibleMessage === "string") {
+                  errorMessage = possibleMessage;
+                } else if (possibleMessage) {
+                  // 객체나 다른 타입인 경우 JSON 문자열로 변환
+                  errorMessage = JSON.stringify(possibleMessage);
+                } else {
+                  errorMessage = defaultMessage;
+                }
               } else if (typeof parsedErrorData === "string") {
                 errorMessage = parsedErrorData || defaultMessage;
               }
@@ -240,7 +277,7 @@ async function apiRequest<T>(endpoint: string, options: RequestOptions = {}): Pr
       }
 
       // 최종 검증: 빈 메시지 방지
-      if (!errorMessage || errorMessage.trim() === "") {
+      if (!errorMessage || (typeof errorMessage === "string" && errorMessage.trim() === "") || typeof errorMessage !== "string") {
         errorMessage = defaultMessage;
       }
 
@@ -276,6 +313,24 @@ async function apiRequest<T>(endpoint: string, options: RequestOptions = {}): Pr
         return {} as T;
       }
 
+      // 성공 응답은 반드시 JSON이어야 함 (이미 위에서 검증됨)
+      if (!isJson) {
+        const errorMessage =
+          `❌ 서버가 JSON이 아닌 응답을 반환했습니다!\n\n` +
+          `요청 URL: ${url}\n` +
+          `Content-Type: ${contentType || "(없음)"}\n` +
+          `예상: application/json\n` +
+          `실제: ${contentType || "text/html 또는 기타"}\n\n` +
+          `이는 잘못된 API 엔드포인트를 호출했거나 Next.js 서버를 호출한 것입니다.`;
+        console.error("[API Request] Non-JSON Success Response:", {
+          url,
+          status: response.status,
+          contentType,
+          bodyPreview: responseText.substring(0, 200),
+        });
+        throw new ApiError(errorMessage, "server", response.status, url, responseText);
+      }
+
       // JSON 응답 처리
       if (isJson && responseText) {
         try {
@@ -303,15 +358,6 @@ async function apiRequest<T>(endpoint: string, options: RequestOptions = {}): Pr
 
           throw new ApiError(`JSON 응답을 파싱할 수 없습니다: ${parseErrorMessage}`, "parse", response.status, url, responseText);
         }
-      }
-
-      // 텍스트 응답 처리
-      if (responseText) {
-        console.log("[API Success (text)]", {
-          status: response.status,
-          textLength: responseText.length,
-        });
-        return responseText as unknown as T;
       }
 
       // 빈 본문이지만 성공 상태 (이미 위에서 처리되지만 안전장치)
@@ -346,19 +392,47 @@ async function apiRequest<T>(endpoint: string, options: RequestOptions = {}): Pr
     }
 
     // 네트워크/CORS 에러 처리
-    const isNetworkError = error instanceof TypeError && error.message.includes("fetch");
+    const errorMessage_lower = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+    const isNetworkError = error instanceof TypeError && errorMessage_lower.includes("fetch");
     const isCorsError =
       error instanceof TypeError &&
-      (error.message.includes("CORS") || error.message.includes("Failed to fetch") || error.message.includes("NetworkError") || error.message.includes("Network request failed"));
+      (errorMessage_lower.includes("cors") ||
+        errorMessage_lower.includes("failed to fetch") ||
+        errorMessage_lower.includes("networkerror") ||
+        errorMessage_lower.includes("network request failed") ||
+        errorMessage_lower.includes("access-control"));
 
     let errorMessage: string;
     let errorType: "network" | "server" | "parse" | "unknown";
 
     if (isCorsError) {
-      errorMessage = "CORS 오류가 발생했습니다. 서버 설정을 확인해주세요.";
+      errorMessage =
+        `❌ CORS 오류가 발생했습니다!\n\n` +
+        `요청 URL: ${url}\n` +
+        `API_BASE_URL: ${API_BASE_URL}\n\n` +
+        `가능한 원인:\n` +
+        `1. 백엔드 서버의 CORS 설정이 프론트엔드 도메인(localhost:3000)을 허용하지 않음\n` +
+        `2. 백엔드 서버가 OPTIONS 요청(Preflight)을 처리하지 않음\n` +
+        `3. 백엔드 서버의 CORS 설정에 필요한 헤더가 누락됨\n\n` +
+        `해결 방법:\n` +
+        `1. 백엔드 서버의 CORS 설정 확인 (Access-Control-Allow-Origin에 localhost:3000 포함)\n` +
+        `2. 백엔드 서버가 OPTIONS 메서드를 허용하는지 확인\n` +
+        `3. 브라우저 개발자 도구의 Network 탭에서 실제 요청/응답 헤더 확인\n\n` +
+        `원본 에러: ${error instanceof Error ? error.message : String(error)}`;
       errorType = "network";
     } else if (isNetworkError) {
-      errorMessage = "네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.";
+      errorMessage =
+        `❌ 네트워크 오류가 발생했습니다!\n\n` +
+        `요청 URL: ${url}\n\n` +
+        `가능한 원인:\n` +
+        `1. 인터넷 연결 문제\n` +
+        `2. 백엔드 서버가 다운되었거나 접근 불가\n` +
+        `3. 방화벽 또는 보안 정책으로 인한 차단\n\n` +
+        `해결 방법:\n` +
+        `1. 인터넷 연결 확인\n` +
+        `2. 백엔드 서버 상태 확인: ${API_BASE_URL}\n` +
+        `3. 브라우저 개발자 도구의 Network 탭에서 요청 상태 확인\n\n` +
+        `원본 에러: ${error instanceof Error ? error.message : String(error)}`;
       errorType = "network";
     } else if (error instanceof Error) {
       errorMessage = error.message || "알 수 없는 오류가 발생했습니다.";
@@ -369,6 +443,10 @@ async function apiRequest<T>(endpoint: string, options: RequestOptions = {}): Pr
     }
 
     // 최종적으로 빈 메시지가 되지 않도록 보장
+    // errorMessage가 문자열이 아닌 경우 문자열로 변환
+    if (typeof errorMessage !== "string") {
+      errorMessage = String(errorMessage) || "알 수 없는 오류가 발생했습니다.";
+    }
     if (!errorMessage || errorMessage.trim() === "") {
       errorMessage = "알 수 없는 오류가 발생했습니다.";
     }

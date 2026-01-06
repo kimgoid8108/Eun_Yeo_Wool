@@ -60,3 +60,9 @@ export interface PlayerResponse {
   name: string;
   createdAt: string;
 }
+
+/**
+ * Player 타입 (PlayerResponse의 별칭)
+ * 서비스 레이어에서 사용
+ */
+export type Player = PlayerResponse;

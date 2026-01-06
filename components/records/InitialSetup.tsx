@@ -1,10 +1,30 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { players as memberList } from "@/data/players";
 import { PlayerInfo } from "@/types/records";
+import { getPlayers } from "@/services/playersService";
+import { Player as ApiPlayer } from "@/types/api";
+import { ApiError } from "@/lib/api";
 import MemberSelection from "./MemberSelection";
 import PlayerList from "./PlayerList";
+
+/**
+ * API Player를 로컬 Player 형식으로 변환
+ * API 응답에는 position이 없으므로 기본값 "FW" 설정
+ */
+interface LocalPlayer {
+  id: string;
+  name: string;
+  position: string;
+}
+
+function convertApiPlayerToLocal(apiPlayer: ApiPlayer): LocalPlayer {
+  return {
+    id: String(apiPlayer.id),
+    name: apiPlayer.name,
+    position: "FW", // 기본값 설정 (API에 position이 없으므로)
+  };
+}
 
 interface InitialSetupProps {
   onComplete: (teamName: string, players: PlayerInfo[]) => void;
@@ -25,13 +45,49 @@ export default function InitialSetup({ onComplete, onClose, registeredPlayerName
   const [teamName, setTeamName] = useState("");
   const [players, setPlayers] = useState<PlayerInfo[]>([]);
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
+  const [memberList, setMemberList] = useState<LocalPlayer[]>([]);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(true);
+  const [membersError, setMembersError] = useState<string | null>(null);
 
   // 이미 등록된 선수 이름 Set (useMemo로 최적화)
   const registeredSet = useMemo(() => new Set(registeredPlayerNames), [registeredPlayerNames]);
 
+  // API에서 회원 명단 불러오기
+  useEffect(() => {
+    const loadMembers = async () => {
+      setIsLoadingMembers(true);
+      setMembersError(null);
+
+      try {
+        console.log("[InitialSetup] Fetching members from API...");
+        const apiPlayers = await getPlayers();
+        const convertedMembers = apiPlayers.map(convertApiPlayerToLocal);
+        console.log("[InitialSetup] Loaded", convertedMembers.length, "members from API");
+        setMemberList(convertedMembers);
+      } catch (err) {
+        console.error("[InitialSetup] Failed to load members:", err);
+        let errorMessage = "회원 명단을 불러오는 중 오류가 발생했습니다.";
+
+        if (err instanceof ApiError) {
+          errorMessage = err.message || `서버 오류 (${err.status || "알 수 없음"})`;
+        } else if (err instanceof Error) {
+          errorMessage = err.message;
+        }
+
+        setMembersError(errorMessage);
+        // 에러 발생 시 빈 배열로 설정하여 계속 진행 가능하도록
+        setMemberList([]);
+      } finally {
+        setIsLoadingMembers(false);
+      }
+    };
+
+    loadMembers();
+  }, []);
+
   // 이미 등록된 선수들을 초기 선택 상태로 설정 (체크만 하고 선수 목록에는 추가하지 않음)
   useEffect(() => {
-    if (registeredPlayerNames.length > 0) {
+    if (registeredPlayerNames.length > 0 && memberList.length > 0) {
       const initialSelected = new Set<string>();
       memberList.forEach((member) => {
         if (registeredSet.has(member.name)) {
@@ -40,7 +96,7 @@ export default function InitialSetup({ onComplete, onClose, registeredPlayerName
       });
       setSelectedMembers(initialSelected);
     }
-  }, [registeredPlayerNames, registeredSet]);
+  }, [registeredPlayerNames, registeredSet, memberList]);
 
   // 회원 선택 핸들러
   const handleMemberToggle = useCallback(
@@ -172,6 +228,22 @@ export default function InitialSetup({ onComplete, onClose, registeredPlayerName
           </div>
           <p className="text-sm text-gray-600 mb-6">팀 이름과 선수 정보를 입력해주세요.</p>
 
+          {/* 회원 명단 로딩 중 */}
+          {isLoadingMembers && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-blue-800 text-sm">회원 명단을 불러오는 중...</p>
+            </div>
+          )}
+
+          {/* 회원 명단 로딩 에러 */}
+          {membersError && (
+            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-yellow-800 font-medium text-sm mb-1">⚠️ 회원 명단 로딩 실패</p>
+              <p className="text-yellow-700 text-xs">{membersError}</p>
+              <p className="text-yellow-600 text-xs mt-2">수동으로 선수를 추가할 수 있습니다.</p>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit}>
             {/* 팀 이름 입력 */}
             <div className="mb-6">
@@ -187,14 +259,25 @@ export default function InitialSetup({ onComplete, onClose, registeredPlayerName
             </div>
 
             {/* 회원 명단에서 선택 */}
-            <MemberSelection members={memberList} selectedMembers={selectedMembers} registeredPlayerNames={registeredPlayerNames} onMemberToggle={handleMemberToggle} onSelectAll={handleSelectAll} />
+            {!isLoadingMembers && (
+              <MemberSelection
+                members={memberList}
+                selectedMembers={selectedMembers}
+                registeredPlayerNames={registeredPlayerNames}
+                onMemberToggle={handleMemberToggle}
+                onSelectAll={handleSelectAll}
+              />
+            )}
 
             {/* 선수 목록 */}
             <PlayerList players={players} positions={[...POSITIONS]} onAddPlayer={handleAddPlayer} onRemovePlayer={handleRemovePlayer} onPlayerChange={handlePlayerChange} />
 
             {/* 제출 버튼 */}
             <div className="flex justify-end gap-3">
-              <button type="submit" className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium">
+              <button
+                type="submit"
+                className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium"
+                disabled={isLoadingMembers}>
                 설정 완료
               </button>
             </div>
