@@ -58,13 +58,17 @@ export default function RecordsPage() {
       }));
 
       // 팀 ID 매핑 저장
-      setTeamIdMap((prev) => ({
-        ...prev,
-        [dateId]: response.teams.reduce((acc, team) => {
+      setTeamIdMap((prev) => {
+        const newDateMap: Record<string, string | number> = response.teams.reduce((acc, team) => {
           acc[team.teamName] = team.id;
           return acc;
-        }, {} as Record<string, string | number>),
-      }));
+        }, {} as Record<string, string | number>);
+
+        return {
+          ...prev,
+          [dateId]: newDateMap,
+        };
+      });
 
       // 경기 결과 변환 (MatchResponse -> MatchScore)
       const matches: MatchScore[] = response.matches.map((match) => ({
@@ -89,7 +93,7 @@ export default function RecordsPage() {
     } catch (error) {
       // 에러 메시지 추출
       let errorMessage = "알 수 없는 오류가 발생했습니다.";
-      let errorDetails: any = {};
+      let errorDetails: Record<string, unknown> = {};
 
       if (error instanceof ApiError) {
         errorMessage = error.message;
@@ -117,18 +121,22 @@ export default function RecordsPage() {
       const savedMatches = localStorage.getItem("football_matches_by_date");
       if (savedTeams) {
         try {
-          const parsed = JSON.parse(savedTeams);
-          setTeamsByDate(parsed);
-          console.log("[RecordsPage] Loaded teams from localStorage (fallback)");
+          const parsed = JSON.parse(savedTeams) as Record<string, TeamInfo[]>;
+          if (parsed && typeof parsed === "object") {
+            setTeamsByDate(parsed);
+            console.log("[RecordsPage] Loaded teams from localStorage (fallback)");
+          }
         } catch (e) {
           console.error("[RecordsPage] Failed to load teams from localStorage:", e);
         }
       }
       if (savedMatches) {
         try {
-          const parsed = JSON.parse(savedMatches);
-          setMatchesByDate(parsed);
-          console.log("[RecordsPage] Loaded matches from localStorage (fallback)");
+          const parsed = JSON.parse(savedMatches) as Record<string, MatchScore[]>;
+          if (parsed && typeof parsed === "object") {
+            setMatchesByDate(parsed);
+            console.log("[RecordsPage] Loaded matches from localStorage (fallback)");
+          }
         } catch (e) {
           console.error("[RecordsPage] Failed to load matches from localStorage:", e);
         }
@@ -207,10 +215,13 @@ export default function RecordsPage() {
         await Promise.all(playerRegistrationPromises);
 
         // 상태 업데이트
-        setTeamsByDate((prev) => ({
-          ...prev,
-          [selectedDateId]: [...(prev[selectedDateId] || []), { teamName, players }],
-        }));
+        setTeamsByDate((prev) => {
+          const currentDateTeams = prev[selectedDateId] || [];
+          return {
+            ...prev,
+            [selectedDateId]: [...currentDateTeams, { teamName, players }],
+          };
+        });
 
         // 팀 ID 매핑 저장
         setTeamIdMap((prev) => {
@@ -287,21 +298,24 @@ export default function RecordsPage() {
         });
 
         // 상태 업데이트
-        setMatchesByDate((prev) => ({
-          ...prev,
-          [selectedDateId]: [
-            ...(prev[selectedDateId] || []),
-            {
-              id: response.id,
-              team1Name: response.team1Name,
-              team1Score: response.team1Score,
-              team1Result: response.team1Result,
-              team2Name: response.team2Name,
-              team2Score: response.team2Score,
-              team2Result: response.team2Result,
-            },
-          ],
-        }));
+        setMatchesByDate((prev) => {
+          const currentDateMatches = prev[selectedDateId] || [];
+          return {
+            ...prev,
+            [selectedDateId]: [
+              ...currentDateMatches,
+              {
+                id: response.id,
+                team1Name: response.team1Name,
+                team1Score: response.team1Score,
+                team1Result: response.team1Result,
+                team2Name: response.team2Name,
+                team2Score: response.team2Score,
+                team2Result: response.team2Result,
+              },
+            ],
+          };
+        });
       } catch (error) {
         const errorMessage = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "경기 추가 중 오류가 발생했습니다.";
         console.error("[RecordsPage] Failed to create match:", {
@@ -333,22 +347,25 @@ export default function RecordsPage() {
         });
 
         // 상태 업데이트
-        setMatchesByDate((prev) => ({
-          ...prev,
-          [selectedDateId]: (prev[selectedDateId] || []).map((m) =>
-            m.id === matchId
-              ? {
-                  id: response.id,
-                  team1Name: response.team1Name,
-                  team1Score: response.team1Score,
-                  team1Result: response.team1Result,
-                  team2Name: response.team2Name,
-                  team2Score: response.team2Score,
-                  team2Result: response.team2Result,
-                }
-              : m
-          ),
-        }));
+        setMatchesByDate((prev) => {
+          const currentDateMatches = prev[selectedDateId] || [];
+          return {
+            ...prev,
+            [selectedDateId]: currentDateMatches.map((m) =>
+              m.id === matchId
+                ? {
+                    id: response.id,
+                    team1Name: response.team1Name,
+                    team1Score: response.team1Score,
+                    team1Result: response.team1Result,
+                    team2Name: response.team2Name,
+                    team2Score: response.team2Score,
+                    team2Result: response.team2Result,
+                  }
+                : m
+            ),
+          };
+        });
       } catch (error) {
         const errorMessage = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "경기 수정 중 오류가 발생했습니다.";
         console.error("[RecordsPage] Failed to update match:", {
@@ -374,10 +391,13 @@ export default function RecordsPage() {
         await recordsService.deleteMatch(matchId);
 
         // 상태 업데이트
-        setMatchesByDate((prev) => ({
-          ...prev,
-          [selectedDateId]: (prev[selectedDateId] || []).filter((m) => m.id !== matchId),
-        }));
+        setMatchesByDate((prev) => {
+          const currentDateMatches = prev[selectedDateId] || [];
+          return {
+            ...prev,
+            [selectedDateId]: currentDateMatches.filter((m) => m.id !== matchId),
+          };
+        });
       } catch (error) {
         const errorMessage = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "경기 삭제 중 오류가 발생했습니다.";
         console.error("[RecordsPage] Failed to delete match:", {
