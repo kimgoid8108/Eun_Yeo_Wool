@@ -8,25 +8,44 @@ import { PlayerResponse } from "@/types/api";
 
 /**
  * 전체 회원 목록 조회
- * 엔드포인트: GET /api/players
- * 참고: 서버 엔드포인트가 /players인 경우 /api를 제거해야 함
+ * 엔드포인트: GET /players
  */
 export async function getPlayers(): Promise<PlayerResponse[]> {
   try {
-    // 서버 엔드포인트: GET /players (또는 /api/players)
-    // 사용자가 처음에 /players라고 했으므로 /api 없이 시도
+    console.log("[playersService] Fetching players from API...");
+
+    // API 응답: 직접 배열 형태 [{ id, name, createdAt }, ...]
+    // lib/api.ts에서 HTML 응답 감지 및 API_BASE_URL 검증을 수행
     const response = await apiGet<PlayerResponse[]>("/players");
 
-    // 빈 배열도 유효한 응답으로 처리
+    console.log("[playersService] API response received:", {
+      type: typeof response,
+      isArray: Array.isArray(response),
+      length: Array.isArray(response) ? response.length : "N/A",
+      sample: Array.isArray(response) && response.length > 0 ? response[0] : null,
+    });
+
+    // 배열인지 확인
     if (Array.isArray(response)) {
+      console.log("[playersService] Successfully loaded", response.length, "players");
       return response;
     }
 
-    // 배열이 아닌 경우 빈 배열 반환
-    console.warn("[playersService] Response is not an array:", response);
-    return [];
+    // 배열이 아닌 경우
+    console.error("[playersService] Response is not an array:", {
+      type: typeof response,
+      value: response,
+      keys: typeof response === "object" && response !== null ? Object.keys(response) : null,
+    });
+    throw new Error(`예상한 배열 형식이 아닙니다. 받은 타입: ${typeof response}`);
   } catch (error) {
     console.error("[playersService] Failed to fetch players:", error);
-    throw error; // 에러를 다시 throw하여 상위에서 처리
+
+    // ApiError는 그대로 throw (lib/api.ts에서 이미 처리됨)
+    if (error instanceof Error) {
+      throw error;
+    }
+
+    throw new Error(`회원 목록을 불러오는 중 오류가 발생했습니다: ${String(error)}`);
   }
 }

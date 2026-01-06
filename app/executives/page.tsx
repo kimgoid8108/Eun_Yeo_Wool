@@ -19,10 +19,26 @@ export default function ExecutivesPage() {
       setError(null);
 
       try {
-        console.log("[ExecutivesPage] Starting to fetch players...");
+        console.log("[ExecutivesPage] Fetching players from API...");
         const data = await getPlayers();
-        console.log("[ExecutivesPage] Successfully loaded players:", data);
-        setPlayers(Array.isArray(data) ? data : []);
+
+        console.log("[ExecutivesPage] Received data:", {
+          isArray: Array.isArray(data),
+          length: Array.isArray(data) ? data.length : 0,
+          firstItem: Array.isArray(data) && data.length > 0 ? data[0] : null,
+        });
+
+        // 배열인지 확인하고 설정
+        if (Array.isArray(data) && data.length > 0) {
+          console.log("[ExecutivesPage] Setting", data.length, "players to state");
+          setPlayers(data);
+        } else if (Array.isArray(data)) {
+          console.log("[ExecutivesPage] Empty array received");
+          setPlayers([]);
+        } else {
+          console.warn("[ExecutivesPage] Invalid data format:", data);
+          setPlayers([]);
+        }
       } catch (err) {
         console.error("[ExecutivesPage] Error caught:", err);
 
@@ -105,11 +121,16 @@ export default function ExecutivesPage() {
 
       <div>
         <h2 className="text-2xl font-semibold text-gray-700 mb-4">일반 회원</h2>
+        {/* 디버깅 정보 (개발용) */}
+        {process.env.NODE_ENV === "development" && <div className="mb-4 text-xs text-gray-500">디버그: players.length = {players.length}</div>}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {players.length === 0 ? (
             <div className="col-span-full text-center py-8 text-gray-500">등록된 회원이 없습니다.</div>
           ) : (
-            players.map((member) => <MemberCard key={member.id} name={member.name} position="" />)
+            players.map((member) => {
+              console.log("[ExecutivesPage] Rendering member:", member);
+              return <MemberCard key={member.id} name={member.name || "이름 없음"} position="" />;
+            })
           )}
         </div>
         {players.length > 0 && <div className="mt-4 text-sm text-gray-600">총 {players.length}명의 회원이 등록되어 있습니다.</div>}
