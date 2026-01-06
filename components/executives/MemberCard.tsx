@@ -9,7 +9,7 @@ export default function MemberCard({ name, position }: MemberCardProps) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xl font-bold text-gray-800">{name}</p>
-          <p className="text-sm text-gray-600 mt-1">{position}</p>
+          {position && <p className="text-sm text-gray-600 mt-1">{position}</p>}
         </div>
         <div className="text-3xl text-gray-400">👤</div>
       </div>
