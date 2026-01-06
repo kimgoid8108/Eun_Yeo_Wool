@@ -32,7 +32,7 @@ export default function RecordsPage() {
   // 로딩 상태
   const [isLoading, setIsLoading] = useState<boolean>(false);
   // 팀 ID 매핑 (API에서 받은 ID를 저장)
-  const [teamIdMap, setTeamIdMap] = useState<Record<string, Record<string, string>>>({});
+  const [teamIdMap, setTeamIdMap] = useState<Record<string, Record<string, string | number>>>({});
 
   // 선택된 날짜 ID (days.id를 저장)
   const [selectedDateId, setSelectedDateId] = useState<string>("");
@@ -63,7 +63,7 @@ export default function RecordsPage() {
         [dateId]: response.teams.reduce((acc, team) => {
           acc[team.teamName] = team.id;
           return acc;
-        }, {} as Record<string, string>),
+        }, {} as Record<string, string | number>),
       }));
 
       // 경기 결과 변환 (MatchResponse -> MatchScore)
@@ -213,13 +213,16 @@ export default function RecordsPage() {
         }));
 
         // 팀 ID 매핑 저장
-        setTeamIdMap((prev) => ({
-          ...prev,
-          [selectedDateId]: {
-            ...(prev[selectedDateId] || {}),
-            [teamName]: teamResponse.id,
-          },
-        }));
+        setTeamIdMap((prev) => {
+          const currentDateMap = prev[selectedDateId] || {};
+          return {
+            ...prev,
+            [selectedDateId]: {
+              ...currentDateMap,
+              [teamName]: teamResponse.id,
+            },
+          };
+        });
 
         setIsSetupModalOpen(false);
       } catch (error) {
