@@ -66,3 +66,49 @@ export interface PlayerResponse {
  * 서비스 레이어에서 사용
  */
 export type Player = PlayerResponse;
+
+/**
+ * 선수 경기 기록 요청 타입 (백엔드 CreatePlayerRecordDto와 1:1 대응)
+ *
+ * 출석 상태는 boolean 하나로만 관리:
+ * - true: 참석 (체크됨)
+ * - false: 불참 (체크 안됨)
+ *
+ * 제거된 필드:
+ * - yellowCard (더 이상 사용하지 않음)
+ * - redCard (더 이상 사용하지 않음)
+ * - isMOM (더 이상 사용하지 않음)
+ * - matchId (더 이상 사용하지 않음)
+ * - cleanSheet (더 이상 사용하지 않음)
+ * - goal (더 이상 사용하지 않음)
+ * - assist (더 이상 사용하지 않음)
+ */
+export interface PlayerRecordRequest {
+  playerId: number;
+  teamId: number;
+  dateId: number;
+  attendance: boolean;
+}
+
+/**
+ * 선수 경기 기록 응답 타입
+ *
+ * 출석 상태는 boolean 하나로만 관리:
+ * - true: 참석 (체크됨)
+ * - false: 불참 (체크 안됨)
+ *
+ * 제거된 필드:
+ * - yellowCard (더 이상 사용하지 않음)
+ * - redCard (더 이상 사용하지 않음)
+ * - isMOM (더 이상 사용하지 않음)
+ * - matchId (더 이상 사용하지 않음)
+ * - cleanSheet (더 이상 사용하지 않음)
+ * - goal (더 이상 사용하지 않음)
+ * - assist (더 이상 사용하지 않음)
+ */
+export interface PlayerRecordResponse {
+  playerId: number;
+  teamId: number;
+  dateId: number;
+  attendance: boolean;
+}

@@ -15,6 +15,7 @@ interface DateNavigationProps {
   onTouchStart: (e: React.TouchEvent) => void;
   onTouchMove: (e: React.TouchEvent) => void;
   onTouchEnd: () => void;
+  onAddDate?: () => void;
 }
 
 /**
@@ -35,6 +36,7 @@ export default function DateNavigation({
   onTouchStart,
   onTouchMove,
   onTouchEnd,
+  onAddDate,
 }: DateNavigationProps) {
   const selectedDay = useMemo(() => days.find((d) => d.id === selectedDateId), [days, selectedDateId]);
   const currentDateIndex = useMemo(() => days.findIndex((d) => d.id === selectedDateId), [days, selectedDateId]);
@@ -93,6 +95,22 @@ export default function DateNavigation({
                   <div className="text-sm text-gray-800">{day.day}</div>
                 </button>
               ))}
+              {/* 날짜 추가 버튼 */}
+              {onAddDate && (
+                <button
+                  onClick={() => {
+                    onCloseDropdown();
+                    onAddDate();
+                  }}
+                  className="w-full px-4 py-3 text-left hover:bg-green-50 transition-colors border-t border-gray-200 bg-green-50">
+                  <div className="text-sm font-medium text-green-700 flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    날짜 추가
+                  </div>
+                </button>
+              )}
             </div>
           )}
         </div>

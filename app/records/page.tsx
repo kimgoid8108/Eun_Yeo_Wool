@@ -8,12 +8,13 @@ import ViewModeToggle from "@/components/records/ViewModeToggle";
 import EmptyTeamMessage from "@/components/records/EmptyTeamMessage";
 import MatchResultView from "@/components/records/MatchResultView";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
-import { days } from "@/data/days";
+import { days as initialDays, Day } from "@/data/days";
 import { TeamInfo, ViewMode, MatchScore } from "@/types/records";
 import * as recordsService from "@/services/recordsService";
 import { TeamResponse, MatchResponse, Player } from "@/types/api";
 import { ApiError } from "@/lib/api";
 import { getPlayers } from "@/services/playersService";
+import AddDateModal from "@/components/records/AddDateModal";
 
 /**
  * 기록지 페이지
@@ -34,10 +35,14 @@ export default function RecordsPage() {
   // 팀 ID 매핑 (API에서 받은 ID를 저장)
   const [teamIdMap, setTeamIdMap] = useState<Record<string, Record<string, string | number>>>({});
 
+  // 날짜 목록 (동적으로 관리, 초기값은 data/days.ts에서 가져옴)
+  const [days, setDays] = useState<Day[]>(initialDays);
   // 선택된 날짜 ID (days.id를 저장)
   const [selectedDateId, setSelectedDateId] = useState<string>("");
   // 날짜 드롭다운 열림/닫힘 상태
   const [isDateDropdownOpen, setIsDateDropdownOpen] = useState(false);
+  // 날짜 추가 모달 열림/닫힘 상태
+  const [isAddDateModalOpen, setIsAddDateModalOpen] = useState<boolean>(false);
   // 현재 보기 모드 (records: 경기 기록, result: 경기 결과)
   const [viewMode, setViewMode] = useState<ViewMode>("records");
 
@@ -48,7 +53,13 @@ export default function RecordsPage() {
     setIsLoading(true);
     try {
       console.log("[RecordsPage] Loading records for dateId:", dateId);
-      const response = await recordsService.getRecordsByDate(dateId);
+
+      // dateId를 숫자로 변환 (days.dateId 사용)
+      const day = days.find(d => d.id === dateId);
+      const numericDateId = day?.dateId ? day.dateId : parseInt(dateId, 10);
+
+      // API 호출 시 숫자 dateId 사용
+      const response = await recordsService.getRecordsByDate(String(numericDateId));
       console.log("[RecordsPage] API Response:", response);
 
       // 팀 정보 변환 (TeamResponse -> TeamInfo)
@@ -116,31 +127,15 @@ export default function RecordsPage() {
         originalError: error,
       });
 
-      // API 실패 시 localStorage에서 불러오기 (fallback)
-      const savedTeams = localStorage.getItem("football_teams_by_date");
-      const savedMatches = localStorage.getItem("football_matches_by_date");
-      if (savedTeams) {
-        try {
-          const parsed = JSON.parse(savedTeams) as Record<string, TeamInfo[]>;
-          if (parsed && typeof parsed === "object") {
-            setTeamsByDate(parsed);
-            console.log("[RecordsPage] Loaded teams from localStorage (fallback)");
-          }
-        } catch (e) {
-          console.error("[RecordsPage] Failed to load teams from localStorage:", e);
-        }
-      }
-      if (savedMatches) {
-        try {
-          const parsed = JSON.parse(savedMatches) as Record<string, MatchScore[]>;
-          if (parsed && typeof parsed === "object") {
-            setMatchesByDate(parsed);
-            console.log("[RecordsPage] Loaded matches from localStorage (fallback)");
-          }
-        } catch (e) {
-          console.error("[RecordsPage] Failed to load matches from localStorage:", e);
-        }
-      }
+      // 에러 발생 시 빈 배열로 초기화 (팀이 없는 상태)
+      setTeamsByDate((prev) => ({
+        ...prev,
+        [dateId]: [],
+      }));
+      setMatchesByDate((prev) => ({
+        ...prev,
+        [dateId]: [],
+      }));
     } finally {
       setIsLoading(false);
     }
@@ -158,7 +153,27 @@ export default function RecordsPage() {
     if (days.length > 0 && !selectedDateId) {
       setSelectedDateId(days[days.length - 1].id);
     }
-  }, [selectedDateId]);
+  }, [selectedDateId, days]);
+
+  // 날짜 추가 핸들러
+  const handleAddDate = useCallback((newDay: Day) => {
+    setDays((prev) => {
+      // 중복 체크
+      if (prev.some((day) => day.dateId === newDay.dateId)) {
+        return prev;
+      }
+      // 날짜 순서대로 정렬하여 추가
+      const updated = [...prev, newDay].sort((a, b) => a.dateId - b.dateId);
+      return updated;
+    });
+    // 새로 추가된 날짜를 선택
+    setSelectedDateId(newDay.id);
+  }, []);
+
+  // 날짜 추가 모달 열기
+  const handleOpenAddDateModal = useCallback(() => {
+    setIsAddDateModalOpen(true);
+  }, []);
 
   // 초기 설정 완료 핸들러
   const handleInitialSetupComplete = useCallback(
@@ -183,18 +198,13 @@ export default function RecordsPage() {
 
         // 2. 날짜 정보 가져오기 및 ISO 문자열로 변환
         const selectedDay = days.find((d) => d.id === selectedDateId);
-        if (!selectedDay) {
+        if (!selectedDay || !selectedDay.dateId) {
           throw new Error("선택한 날짜를 찾을 수 없습니다.");
         }
 
-        // 날짜 문자열에서 날짜 추출 (예: "2026년 1월 3일 (토)" -> "2026-01-03")
-        const dateMatch = selectedDay.day.match(/(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/);
-        if (!dateMatch) {
-          throw new Error("날짜 형식을 파싱할 수 없습니다.");
-        }
-        const [, year, month, day] = dateMatch;
-        const dateString = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-        const joinedAt = new Date(dateString).toISOString();
+        // dateId(타임스탬프)를 Date 객체로 변환하여 ISO 문자열 생성
+        const date = new Date(selectedDay.dateId);
+        const joinedAt = date.toISOString();
 
         // 3. 팀 생성 API 호출 (POST /teams)
         const teamResponse = await recordsService.createTeamOnly(teamName);
@@ -280,6 +290,16 @@ export default function RecordsPage() {
   const currentMatches = useMemo(() => {
     return matchesByDate[selectedDateId] || [];
   }, [matchesByDate, selectedDateId]);
+
+  // 실제 데이터가 있는 날짜만 필터링 (더미 데이터 제거)
+  const availableDays = useMemo(() => {
+    return days.filter((day) => {
+      const teams = teamsByDate[day.id] || [];
+      const matches = matchesByDate[day.id] || [];
+      // 팀이나 경기 데이터가 있는 날짜만 표시
+      return teams.length > 0 || matches.length > 0;
+    });
+  }, [teamsByDate, matchesByDate]);
 
   // 경기 추가 핸들러
   const handleAddMatch = useCallback(
@@ -442,63 +462,49 @@ export default function RecordsPage() {
     onSwipeRight: handlePreviousDate,
   });
 
-  // 저장 핸들러 (localStorage 백업용)
-  const handleSave = useCallback(() => {
-    try {
-      // 경기 기록 백업 저장
-      localStorage.setItem("football_teams_by_date", JSON.stringify(teamsByDate));
-      // 경기 결과 백업 저장
-      localStorage.setItem("football_matches_by_date", JSON.stringify(matchesByDate));
-      alert("백업 저장되었습니다!");
-    } catch (error) {
-      console.error("Failed to save data:", error);
-      alert("저장 중 오류가 발생했습니다.");
-    }
-  }, [teamsByDate, matchesByDate]);
-
   return (
     <div className="p-6">
-      {/* 페이지 제목 및 저장 버튼 */}
+      {/* 페이지 제목 */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold text-gray-800">기록지</h1>
-        <div className="flex items-center gap-3">
-          {isLoading && (
-            <div className="text-sm text-gray-500 flex items-center gap-2">
-              <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              로딩 중...
-            </div>
-          )}
-          <button
-            onClick={handleSave}
-            disabled={isLoading}
-            className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium shadow-md transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+        {isLoading && (
+          <div className="text-sm text-gray-500 flex items-center gap-2">
+            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            백업 저장
-          </button>
-        </div>
+            로딩 중...
+          </div>
+        )}
       </div>
 
       {/* 보기 모드 선택 버튼 */}
       <ViewModeToggle viewMode={viewMode} onModeChange={setViewMode} />
 
-      {/* 날짜 네비게이션 섹션 */}
-      <DateNavigation
-        days={days}
-        selectedDateId={selectedDateId}
-        onDateSelect={handleDateSelect}
-        isDateDropdownOpen={isDateDropdownOpen}
-        onToggleDropdown={() => setIsDateDropdownOpen((prev) => !prev)}
-        onCloseDropdown={() => setIsDateDropdownOpen(false)}
-        onPrevious={handlePreviousDate}
-        onNext={handleNextDate}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
+      {/* 날짜 네비게이션 섹션 (모든 토요일 날짜 선택 가능) */}
+      {days.length > 0 && (
+        <DateNavigation
+          days={days}
+          selectedDateId={selectedDateId}
+          onDateSelect={handleDateSelect}
+          isDateDropdownOpen={isDateDropdownOpen}
+          onToggleDropdown={() => setIsDateDropdownOpen((prev) => !prev)}
+          onCloseDropdown={() => setIsDateDropdownOpen(false)}
+          onPrevious={handlePreviousDate}
+          onNext={handleNextDate}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onAddDate={handleOpenAddDateModal}
+        />
+      )}
+
+      {/* 날짜 추가 모달 */}
+      <AddDateModal
+        isOpen={isAddDateModalOpen}
+        onClose={() => setIsAddDateModalOpen(false)}
+        onAddDate={handleAddDate}
+        existingDays={days}
       />
 
       {/* 팀 추가 버튼 */}
@@ -516,11 +522,27 @@ export default function RecordsPage() {
       {/* 선택된 날짜의 경기 기록 테이블 */}
       {selectedDateId &&
         viewMode === "records" &&
-        currentTeams.map((team, index) => (
-          <div key={index} className="mb-6">
-            <AttendanceTable selectedDate={selectedDateId} teamName={team.teamName} customPlayers={team.players} matches={currentMatches} />
-          </div>
-        ))}
+        currentTeams.map((team, index) => {
+          // selectedDateId에서 dateId 가져오기
+          const day = days.find(d => d.id === selectedDateId);
+          const dateId = day?.dateId;
+          // teamId 가져오기
+          const teamIdValue = teamIdMap[selectedDateId]?.[team.teamName];
+          const teamId = typeof teamIdValue === "number" ? teamIdValue : typeof teamIdValue === "string" ? parseInt(teamIdValue, 10) : undefined;
+
+          return (
+            <div key={index} className="mb-6">
+              <AttendanceTable
+                selectedDate={selectedDateId}
+                teamName={team.teamName}
+                customPlayers={team.players}
+                matches={currentMatches}
+                dateId={dateId}
+                teamId={teamId}
+              />
+            </div>
+          );
+        })}
 
       {/* 팀이 없을 때 안내 메시지 */}
       {selectedDateId && viewMode === "records" && currentTeams.length === 0 && <EmptyTeamMessage onAddTeam={() => setIsSetupModalOpen(true)} />}

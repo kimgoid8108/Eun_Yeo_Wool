@@ -4,7 +4,7 @@
  */
 
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
-import { TeamRequest, TeamResponse, MatchRequest, MatchResponse, DateRecordsResponse } from "@/types/api";
+import { TeamRequest, TeamResponse, MatchRequest, MatchResponse, DateRecordsResponse, PlayerRecordRequest, PlayerRecordResponse } from "@/types/api";
 
 /**
  * 특정 날짜의 경기 기록 조회
@@ -131,4 +131,83 @@ export async function updateMatch(matchId: string, data: Partial<MatchRequest>):
  */
 export async function deleteMatch(matchId: string): Promise<void> {
   return apiDelete<void>(`/matches/${matchId}`);
+}
+
+/**
+ * 선수 경기 기록 추가/수정
+ * 엔드포인트: POST /player-records
+ * 백엔드 DTO: CreatePlayerRecordDto
+ *
+ * 출석 상태는 boolean 하나로만 관리:
+ * - true: 참석 (체크됨)
+ * - false: 불참 (체크 안됨)
+ *
+ * Payload 필드 (4개만 허용):
+ * - playerId: number (필수)
+ * - teamId: number (필수)
+ * - dateId: number (필수)
+ * - attendance: boolean (필수)
+ *
+ * 제거된 필드:
+ * - yellowCard (더 이상 사용하지 않음)
+ * - redCard (더 이상 사용하지 않음)
+ * - isMOM (더 이상 사용하지 않음)
+ * - matchId (더 이상 사용하지 않음)
+ * - cleanSheet (더 이상 사용하지 않음)
+ * - goal (더 이상 사용하지 않음)
+ * - assist (더 이상 사용하지 않음)
+ */
+export async function savePlayerRecord(data: { playerId: number; teamId: number; dateId: number; attendance: boolean }): Promise<void> {
+  // 백엔드 DTO에 맞게 payload 명시적으로 재구성
+  // 서버 DTO에 정의된 필드만 포함 (yellowCard, redCard 등 불필요한 필드 절대 포함하지 않음)
+  const payload: PlayerRecordRequest = {
+    playerId: data.playerId,
+    teamId: data.teamId,
+    dateId: data.dateId,
+    attendance: data.attendance,
+  };
+
+  console.log("[recordsService] Saving player record:", {
+    endpoint: "/player-records",
+    payload,
+  });
+
+  try {
+    await apiPost<void>("/player-records", payload);
+    console.log("[recordsService] Player record saved successfully:", payload);
+  } catch (error) {
+    console.error("[recordsService] Failed to save player record:", {
+      endpoint: "/player-records",
+      payload,
+      error,
+    });
+    throw error;
+  }
+}
+
+/**
+ * 팀의 선수 경기 기록 조회
+ * 엔드포인트: GET /player-records?dateId={dateId}
+ */
+export async function getPlayerRecords(dateId: number): Promise<PlayerRecordResponse[]> {
+  console.log("[recordsService] Fetching player records:", {
+    endpoint: "/player-records",
+    dateId,
+  });
+
+  try {
+    const response = await apiGet<PlayerRecordResponse[]>("/player-records", {
+      dateId,
+    });
+    console.log("[recordsService] Player records fetched successfully:", response);
+    return response;
+  } catch (error) {
+    console.error("[recordsService] Failed to fetch player records:", {
+      endpoint: "/player-records",
+      dateId,
+      error,
+    });
+    // 에러 발생 시 빈 배열 반환 (저장된 데이터가 없음을 의미)
+    return [];
+  }
 }
