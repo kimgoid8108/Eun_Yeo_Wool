@@ -45,7 +45,7 @@ export async function createTeamOnly(name: string): Promise<{ id: number }> {
  * 엔드포인트: POST /team-players
  * DTO: { teamId: number, playerId: number, joinedAt: string (ISO 8601) }
  */
-export async function addPlayerToTeam(teamId: number, playerId: number, joinedAt: string): Promise<void> {
+export async function addPlayerToTeam(teamId: number, playerId: number, joinedAt: number): Promise<void> {
   console.log("[recordsService] Adding player to team:", {
     endpoint: "/team-players",
     teamId,
