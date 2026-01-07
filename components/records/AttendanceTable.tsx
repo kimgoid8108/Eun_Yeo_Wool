@@ -1,82 +1,36 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { scoringRules } from "@/data/rules";
-import { savePlayerRecord, getPlayerRecords } from "@/services/recordsService";
-import { getPlayers } from "@/services/playersService";
-import { Player } from "@/types/api";
-import { days } from "@/data/days";
+/**
+ * 출석 테이블 컴포넌트
+ *
+ * 선수들의 출석 및 통계를 관리하는 테이블 컴포넌트입니다.
+ *
+ * 사용하는 커스텀 훅:
+ * - usePlayerIdMap: 선수 ID 매핑 관리
+ * - usePlayerStats: 선수 통계 데이터 관리
+ * - useAttendanceManagement: 출석 상태 관리
+ * - usePlayerStatsEditing: 선수 통계 편집 관리
+ * - usePlayerStatsSave: 선수 통계 저장 관리
+ *
+ * 사용하는 유틸리티:
+ * - utils/playerStatsUtils: 선수 통계 계산 및 정렬 함수
+ *
+ * 사용처:
+ * - app/records/page.tsx: 기록지 페이지에서 팀별 출석 테이블 표시
+ */
 
-type MatchScore = {
-  team1Name: string;
-  team2Name: string;
-  team1Result: "WIN" | "DRAW" | "LOSE";
-  team2Result: "WIN" | "DRAW" | "LOSE";
-};
-
-type PlayerRecordResponse = {
-  playerId: number;
-  attendance: boolean;
-};
-
-export interface PlayerStat {
-  id: number;
-  name: string;
-  position: string;
-  attendance: number;
-  goals: number;
-  assists: number;
-  cleanSheet: number;
-  wins: number;
-  draws: number;
-  loses: number;
-  mom: number;
-  totalPoint: number;
-}
+import React, { useState, useMemo } from "react";
+import { MatchScore, PlayerStat } from "@/types/playerStats";
+import { usePlayerIdMap } from "@/hooks/usePlayerIdMap";
+import { usePlayerStats } from "@/hooks/usePlayerStats";
+import { useAttendanceManagement } from "@/hooks/useAttendanceManagement";
+import { usePlayerStatsEditing } from "@/hooks/usePlayerStatsEditing";
+import { usePlayerStatsSave } from "@/hooks/usePlayerStatsSave";
+import { calculateTeamRecord } from "@/utils/playerStatsUtils";
 
 // 상수
 const POSITIONS = ["FW", "MF", "DF", "GK"] as const;
 const EDITABLE_FIELDS = ["goals", "assists", "cleanSheet", "wins", "draws", "loses", "mom"] as const;
-
-// 유틸리티 함수
-const sortPlayerStats = (stats: PlayerStat[]): PlayerStat[] => {
-  return [...stats].sort((a, b) => {
-    if (a.attendance > 0 && b.attendance === 0) return -1;
-    if (a.attendance === 0 && b.attendance > 0) return 1;
-    return b.totalPoint - a.totalPoint;
-  });
-};
-
-const calculateTotalPoint = (attendance: number, goals: number, assists: number, cleanSheet: number, mom: number): number => {
-  const attendanceScore = attendance > 0 ? scoringRules.attendance : 0;
-  return attendanceScore + goals * scoringRules.goal + assists * scoringRules.assist + cleanSheet * scoringRules.cleanSheet + mom * scoringRules.mom;
-};
-
-const calculateTeamRecord = (matches: MatchScore[], teamName: string) => {
-  if (matches.length === 0) return { wins: 0, draws: 0, loses: 0 };
-
-  const teamMatches = matches.filter((m) => m.team1Name === teamName || m.team2Name === teamName);
-  let wins = 0;
-  let draws = 0;
-  let loses = 0;
-
-  teamMatches.forEach((match) => {
-    const teamResult = match.team1Name === teamName ? match.team1Result : match.team2Result;
-    if (teamResult === "WIN") wins++;
-    else if (teamResult === "DRAW") draws++;
-    else if (teamResult === "LOSE") loses++;
-  });
-
-  return { wins, draws, loses };
-};
-
-const createPlayerRecordMap = (records: PlayerRecordResponse[]): Map<number, PlayerRecordResponse> => {
-  const map = new Map<number, PlayerRecordResponse>();
-  records.forEach((record) => {
-    map.set(record.playerId, record);
-  });
-  return map;
-};
 
 // 컴포넌트
 interface TableHeaderProps {
@@ -288,39 +242,11 @@ interface AttendanceTableProps {
   teamId?: number;
 }
 
-// 출석 상태 타입: 프론트 전용 상태 (DB 저장 필드 제외)
-type AttendanceState = {
-  playerName: string;
-  attendance: boolean;
-};
-
 export default function AttendanceTable({ selectedDate, teamName, customPlayers, matches = [], dateId, teamId }: AttendanceTableProps) {
-  const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
-  const [editingCell, setEditingCell] = useState<{ playerId: number; field: string } | null>(null);
-  const [editValue, setEditValue] = useState<string>("");
   const [showPlayerScores, setShowPlayerScores] = useState<boolean>(false);
-  const [playerIdMap, setPlayerIdMap] = useState<Map<string, number>>(new Map());
-  const [isSaving, setIsSaving] = useState<boolean>(false);
-  // 출석 상태는 프론트 전용 상태로만 관리 (DB 저장 필드 제외)
-  const [attendanceMap, setAttendanceMap] = useState<Record<number, AttendanceState>>({});
-  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // 선수 ID 매핑 로드
-  useEffect(() => {
-    const loadPlayerIdMap = async () => {
-      try {
-        const apiPlayers: Player[] = await getPlayers();
-        const map = new Map<string, number>();
-        apiPlayers.forEach((player) => {
-          map.set(player.name, player.id);
-        });
-        setPlayerIdMap(map);
-      } catch (error) {
-        console.error("[AttendanceTable] Failed to load players:", error);
-      }
-    };
-    loadPlayerIdMap();
-  }, []);
+  // 선수 ID 매핑 로드 (커스텀 훅 사용)
+  const playerIdMap = usePlayerIdMap();
 
   // 승무패 계산 (메모이제이션)
   const teamRecord = useMemo(() => calculateTeamRecord(matches, teamName), [matches, teamName]);
@@ -328,285 +254,17 @@ export default function AttendanceTable({ selectedDate, teamName, customPlayers,
   // 경기 결과 존재 여부 (메모이제이션)
   const hasMatchResults = useMemo(() => matches.some((m) => m.team1Name === teamName || m.team2Name === teamName), [matches, teamName]);
 
-  // 선수 통계 로드
-  useEffect(() => {
-    if (!selectedDate || playerIdMap.size === 0) {
-      if (!selectedDate) setPlayerStats([]);
-      return;
-    }
+  // 선수 통계 데이터 관리 (커스텀 훅 사용)
+  const { playerStats, setPlayerStats, attendanceMap, setAttendanceMap, updatePlayerStat } = usePlayerStats(selectedDate, customPlayers, dateId, playerIdMap, teamRecord);
 
-    // 이전 요청 취소
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
+  // 출석 관리 (커스텀 훅 사용)
+  const { isAllAttended, handleAttendanceToggle, handleToggleAllAttendance } = useAttendanceManagement(playerStats, attendanceMap, setAttendanceMap, setPlayerStats, updatePlayerStat);
 
-    const loadPlayerStats = async () => {
-      const numericDateId = typeof dateId === "number" ? dateId : days.find((d) => d.id === selectedDate)?.dateId;
+  // 편집 관리 (커스텀 훅 사용)
+  const { editingCell, editValue, handleCellClick, handleSave, handleCancel, handleKeyDown, handleEditValueChange, handlePositionChange } = usePlayerStatsEditing(updatePlayerStat);
 
-      let playerRecordMap = new Map<number, PlayerRecordResponse>();
-      if (typeof numericDateId === "number") {
-        try {
-          const savedRecords: PlayerRecordResponse[] = await getPlayerRecords(numericDateId);
-          if (savedRecords?.length > 0) {
-            playerRecordMap = createPlayerRecordMap(savedRecords);
-          }
-        } catch (error) {
-          if (error instanceof Error && error.name !== "AbortError") {
-            console.error("[AttendanceTable] Failed to load saved records from DB:", error);
-          }
-        }
-      }
-
-      // 모든 선수에 대해 프론트 상태 초기화 (DB에서 불러온 참석자 + 불참자 모두 포함)
-      const stats: PlayerStat[] = customPlayers
-        .map((player) => {
-          const apiPlayerId = playerIdMap.get(player.name);
-          if (apiPlayerId === undefined) {
-            console.warn(`[AttendanceTable] Player ID not found for: ${player.name}`);
-            return null;
-          }
-
-          // DB에서 저장된 기록 조회 (참석자만 DB에 저장되므로, 있으면 참석, 없으면 불참)
-          const savedRecord = playerRecordMap.get(apiPlayerId);
-          const attendanceValue = savedRecord?.attendance ?? false;
-          const attendance = attendanceValue ? 1 : 0;
-
-          const totalPoint = calculateTotalPoint(attendance, 0, 0, 0, 0);
-
-          return {
-            id: apiPlayerId,
-            name: player.name,
-            position: player.position,
-            attendance,
-            goals: 0,
-            assists: 0,
-            cleanSheet: 0,
-            wins: teamRecord.wins,
-            draws: teamRecord.draws,
-            loses: teamRecord.loses,
-            mom: 0,
-            totalPoint,
-          };
-        })
-        .filter((stat): stat is PlayerStat => stat !== null);
-
-      // 프론트 전용 출석 상태 초기화 (playerName 포함)
-      const initialAttendanceMap: Record<number, AttendanceState> = {};
-      stats.forEach((stat) => {
-        const savedRecord = playerRecordMap.get(stat.id);
-        initialAttendanceMap[stat.id] = {
-          playerName: stat.name,
-          attendance: savedRecord?.attendance ?? false,
-        };
-      });
-      setAttendanceMap(initialAttendanceMap);
-      setPlayerStats(sortPlayerStats(stats));
-    };
-
-    loadPlayerStats();
-
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, [selectedDate, customPlayers, teamName, dateId, playerIdMap, teamRecord]);
-
-  // 핸들러들
-  const handleCellClick = useCallback((playerId: number, field: string, currentValue: number) => {
-    setEditingCell({ playerId, field });
-    setEditValue(currentValue.toString());
-  }, []);
-
-  const updatePlayerStat = useCallback((playerId: number, updater: (player: PlayerStat) => PlayerStat) => {
-    setPlayerStats((prev) => sortPlayerStats(prev.map((p) => (p.id === playerId ? updater(p) : p))));
-  }, []);
-
-  const handleSave = useCallback(
-    (playerId: number, field: string) => {
-      const value = Math.max(0, parseInt(editValue) || 0);
-      updatePlayerStat(playerId, (player) => {
-        const updated = { ...player, [field]: value };
-        updated.totalPoint = calculateTotalPoint(updated.attendance, updated.goals, updated.assists, updated.cleanSheet, updated.mom);
-        return updated;
-      });
-      setEditingCell(null);
-      setEditValue("");
-    },
-    [editValue, updatePlayerStat]
-  );
-
-  const handleAttendanceToggle = useCallback(
-    (playerId: number) => {
-      // 프론트 전용 출석 상태 업데이트
-      setAttendanceMap((prev) => {
-        const current = prev[playerId];
-        if (!current) return prev;
-        return {
-          ...prev,
-          [playerId]: {
-            playerName: current.playerName,
-            attendance: !current.attendance,
-          },
-        };
-      });
-      // UI 상태 업데이트
-      updatePlayerStat(playerId, (player) => {
-        const newAttendance = player.attendance > 0 ? 0 : 1;
-        const updated = { ...player, attendance: newAttendance };
-        updated.totalPoint = calculateTotalPoint(updated.attendance, updated.goals, updated.assists, updated.cleanSheet, updated.mom);
-        return updated;
-      });
-    },
-    [updatePlayerStat]
-  );
-
-  const handleToggleAllAttendance = useCallback(() => {
-    setPlayerStats((prev) => {
-      const allAttended = prev.length > 0 && prev.every((player) => player.attendance > 0);
-      const newAttendanceValue = !allAttended;
-      const newAttendance = newAttendanceValue ? 1 : 0;
-
-      // 프론트 전용 출석 상태 업데이트
-      setAttendanceMap((currentMap) => {
-        const newMap: Record<number, AttendanceState> = {};
-        prev.forEach((player) => {
-          const current = currentMap[player.id];
-          newMap[player.id] = {
-            playerName: current?.playerName ?? player.name,
-            attendance: newAttendanceValue,
-          };
-        });
-        return newMap;
-      });
-
-      return sortPlayerStats(
-        prev.map((player) => {
-          const updated = { ...player, attendance: newAttendance };
-          updated.totalPoint = calculateTotalPoint(updated.attendance, updated.goals, updated.assists, updated.cleanSheet, updated.mom);
-          return updated;
-        })
-      );
-    });
-  }, []);
-
-  const isAllAttended = useMemo(() => {
-    if (playerStats.length === 0) return false;
-    return playerStats.every((player) => {
-      const attendanceState = attendanceMap[player.id];
-      return attendanceState?.attendance === true;
-    });
-  }, [playerStats, attendanceMap]);
-
-  const handleCancel = useCallback(() => {
-    setEditingCell(null);
-    setEditValue("");
-  }, []);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>, playerId: number, field: string) => {
-      if (e.key === "Enter") {
-        handleSave(playerId, field);
-      } else if (e.key === "Escape") {
-        handleCancel();
-      }
-    },
-    [handleSave, handleCancel]
-  );
-
-  const handleEditValueChange = useCallback((value: string) => {
-    setEditValue(value);
-  }, []);
-
-  const handlePositionChange = useCallback((playerId: number, position: string) => {
-    setPlayerStats((prev) => prev.map((player) => (player.id === playerId ? { ...player, position } : player)));
-  }, []);
-
-  const handleSaveAll = useCallback(async () => {
-    if (dateId === undefined || teamId === undefined || playerStats.length === 0) {
-      alert(dateId === undefined ? "날짜 정보가 없어 저장할 수 없습니다." : teamId === undefined ? "팀 정보가 없어 저장할 수 없습니다." : "저장할 데이터가 없습니다.");
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      // 참석자(attendance === true)만 필터링하여 DB에 저장
-      const playersToSave = playerStats.filter((player) => {
-        const attendanceState = attendanceMap[player.id];
-        return attendanceState?.attendance === true;
-      });
-
-      if (playersToSave.length === 0) {
-        alert("저장할 참석자가 없습니다.");
-        setIsSaving(false);
-        return;
-      }
-
-      // 참석자만 DB에 저장 (payload: playerId, teamId, dateId, attendance: true)
-      const savePromises = playersToSave.map((player) =>
-        savePlayerRecord({
-          playerId: player.id,
-          teamId,
-          dateId,
-          attendance: true, // 참석자만 저장하므로 항상 true
-        })
-      );
-
-      await Promise.all(savePromises);
-      alert(`참석자 ${playersToSave.length}명의 데이터가 저장되었습니다!`);
-
-      // DB 저장 후 최신 데이터 다시 불러오기 (참석자만 DB에 있음)
-      const numericDateId = typeof dateId === "number" ? dateId : days.find((d) => d.id === selectedDate)?.dateId;
-
-      if (typeof numericDateId === "number") {
-        try {
-          const savedRecords: PlayerRecordResponse[] = await getPlayerRecords(numericDateId);
-          const playerRecordMap = createPlayerRecordMap(savedRecords);
-
-          // 프론트 전용 출석 상태 업데이트 (DB에서 불러온 참석자 + 프론트 상태의 불참자 모두 유지)
-          setAttendanceMap((prevMap) => {
-            const updatedMap: Record<number, AttendanceState> = { ...prevMap };
-            // DB에서 불러온 참석자 정보로 업데이트
-            savedRecords.forEach((record) => {
-              const existing = prevMap[record.playerId];
-              updatedMap[record.playerId] = {
-                playerName: existing?.playerName ?? playerStats.find((p) => p.id === record.playerId)?.name ?? "",
-                attendance: record.attendance, // DB에서 불러온 값 (항상 true)
-              };
-            });
-            // 불참자는 프론트 상태 유지 (DB에 저장되지 않았으므로 프론트 상태 그대로)
-            return updatedMap;
-          });
-
-          // UI 상태 업데이트 (참석자만 DB에서 불러온 값으로 업데이트, 불참자는 프론트 상태 유지)
-          setPlayerStats((prev) =>
-            sortPlayerStats(
-              prev.map((stat) => {
-                const savedRecord = playerRecordMap.get(stat.id);
-                if (savedRecord) {
-                  // DB에 저장된 참석자: DB 값으로 업데이트
-                  const attendance = savedRecord.attendance ? 1 : 0;
-                  const updated = { ...stat, attendance };
-                  updated.totalPoint = calculateTotalPoint(attendance, 0, 0, 0, 0);
-                  return updated;
-                }
-                // DB에 없는 불참자: 프론트 상태 유지
-                return stat;
-              })
-            )
-          );
-        } catch (error) {
-          console.error("[AttendanceTable] Failed to reload saved records after save:", error);
-        }
-      }
-    } catch (error) {
-      console.error("[AttendanceTable] Failed to save all records to DB:", error);
-      alert("데이터 저장에 실패했습니다. 다시 시도해주세요.");
-    } finally {
-      setIsSaving(false);
-    }
-  }, [playerStats, dateId, teamId, attendanceMap, selectedDate]);
+  // 저장 관리 (커스텀 훅 사용)
+  const { isSaving, handleSaveAll } = usePlayerStatsSave(playerStats, attendanceMap, dateId, teamId, selectedDate, setPlayerStats, setAttendanceMap);
 
   // 팀 승무패 표시 텍스트 (메모이제이션)
   const teamRecordText = useMemo(() => {
@@ -684,3 +342,6 @@ export default function AttendanceTable({ selectedDate, teamName, customPlayers,
     </div>
   );
 }
+
+// PlayerStat 타입을 외부에서 사용할 수 있도록 export
+export type { PlayerStat } from "@/types/playerStats";

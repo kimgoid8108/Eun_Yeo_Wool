@@ -1,3 +1,9 @@
+/**
+ * 필요한 공간 페이지
+ *
+ * 향후 새로운 기능을 추가할 공간을 위한 페이지입니다.
+ * 현재는 준비 중 메시지만 표시합니다.
+ */
 export default function SpacePage() {
   return (
     <div className="p-6">

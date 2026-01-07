@@ -6,7 +6,11 @@ interface EmptyTeamMessageProps {
 
 /**
  * 빈 팀 메시지 컴포넌트
- * - 팀이 없을 때 표시되는 안내 메시지
+ *
+ * 팀이 없을 때 표시되는 안내 메시지 컴포넌트입니다.
+ *
+ * 사용처:
+ * - app/records/page.tsx: 기록지 페이지에서 팀이 없을 때 안내 메시지 표시
  */
 export default function EmptyTeamMessage({ onAddTeam }: EmptyTeamMessageProps) {
   return (

@@ -1,7 +1,18 @@
 /**
  * API 클라이언트 설정
- * - 기본 URL 및 공통 설정
- * - 에러 처리
+ *
+ * 모든 API 호출의 기반이 되는 공통 모듈입니다.
+ *
+ * 주요 기능:
+ * - 기본 URL 및 공통 설정 관리
+ * - 네트워크/서버/파싱 에러 처리
+ * - CORS 설정 및 요청/응답 검증
+ * - HTML 응답 감지 및 에러 처리
+ *
+ * 사용처:
+ * - services/playersService.ts: 선수 API 호출 시 apiGet 사용
+ * - services/recordsService.ts: 기록 API 호출 시 apiGet, apiPost, apiPut, apiDelete 사용
+ * - 모든 서비스 모듈에서 간접적으로 사용됨
  */
 
 // 환경변수 로드 확인

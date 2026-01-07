@@ -1,3 +1,11 @@
+/**
+ * 임원 카드 컴포넌트
+ *
+ * 임원 정보를 카드 형태로 표시하는 컴포넌트입니다.
+ *
+ * 사용처:
+ * - app/executives/page.tsx: 회원명단 페이지에서 임원 정보 표시
+ */
 interface ExecutiveCardProps {
   role: string;
   name: string;

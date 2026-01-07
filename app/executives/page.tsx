@@ -1,3 +1,16 @@
+/**
+ * 회원명단 페이지
+ *
+ * 임원단과 일반 회원 목록을 표시하는 페이지입니다.
+ * API에서 회원 목록을 가져와 표시합니다.
+ *
+ * 사용하는 컴포넌트:
+ * - ExecutiveCard: 임원 정보 카드 표시
+ * - MemberCard: 회원 정보 카드 표시
+ *
+ * 사용하는 서비스:
+ * - playersService: 회원 목록 API 호출
+ */
 "use client";
 
 import { useState, useEffect } from "react";

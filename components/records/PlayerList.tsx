@@ -15,8 +15,13 @@ interface PlayerListProps {
 
 /**
  * 선수 목록 컴포넌트
+ *
+ * 선수 정보를 입력하고 관리하는 컴포넌트입니다.
  * - 선수 이름과 포지션을 입력/수정
  * - 선수 추가/삭제 기능
+ *
+ * 사용처:
+ * - components/records/InitialSetup.tsx: 초기 설정 모달에서 선수 목록 컴포넌트로 사용
  */
 export default function PlayerList({ players, positions, onAddPlayer, onRemovePlayer, onPlayerChange }: PlayerListProps) {
   return (

@@ -13,8 +13,13 @@ interface AddMatchModalProps {
 
 /**
  * 경기 추가/수정 모달 컴포넌트
+ *
+ * 경기 결과를 추가하거나 수정하는 모달 컴포넌트입니다.
  * - 경기 스코어 입력
  * - 팀 선택 및 스코어 입력
+ *
+ * 사용처:
+ * - components/records/MatchResultView.tsx: 경기 결과 뷰에서 경기 추가/수정 모달로 사용
  */
 export default function AddMatchModal({
   teamNames,

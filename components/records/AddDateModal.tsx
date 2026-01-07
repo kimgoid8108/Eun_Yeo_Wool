@@ -12,9 +12,14 @@ interface AddDateModalProps {
 
 /**
  * 날짜 추가 모달 컴포넌트
+ *
+ * 경기 날짜를 추가하는 모달 컴포넌트입니다.
  * - 날짜 선택기로 날짜 선택
  * - 토요일인지 검증
  * - 중복 날짜 체크
+ *
+ * 사용처:
+ * - app/records/page.tsx: 기록지 페이지에서 날짜 추가 모달로 사용
  */
 export default function AddDateModal({ isOpen, onClose, onAddDate, existingDays }: AddDateModalProps) {
   const [selectedDate, setSelectedDate] = useState<string>("");

@@ -1,3 +1,11 @@
+/**
+ * 지출 내역 테이블 컴포넌트
+ *
+ * 회비 지출 내역을 테이블 형태로 표시하는 컴포넌트입니다.
+ *
+ * 사용처:
+ * - app/fees/history/page.tsx: 회비 사용내역 페이지에서 지출 내역 표시
+ */
 import { fees } from "@/data/fees";
 
 export default function ExpenseTable() {

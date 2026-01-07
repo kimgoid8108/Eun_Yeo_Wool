@@ -1,3 +1,11 @@
+/**
+ * 미니 차트 컴포넌트
+ *
+ * 간단한 막대 그래프를 표시하는 컴포넌트입니다.
+ *
+ * 사용처:
+ * - app/page.tsx: 대시보드 메인 페이지에서 월별 출석 통계 그래프 표시
+ */
 interface MiniChartProps {
   title: string;
   data: number[];

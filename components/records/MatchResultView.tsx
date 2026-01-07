@@ -15,8 +15,13 @@ interface MatchResultViewProps {
 
 /**
  * 경기 결과 뷰 컴포넌트
+ *
+ * 경기 결과를 표시하고 관리하는 컴포넌트입니다.
  * - 경기 목록 표시
  * - 경기 추가/수정/삭제 기능
+ *
+ * 사용처:
+ * - app/records/page.tsx: 기록지 페이지에서 경기 결과 모드일 때 표시
  */
 export default function MatchResultView({
   selectedDateId,

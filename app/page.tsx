@@ -1,3 +1,17 @@
+/**
+ * 대시보드 메인 페이지
+ *
+ * 애플리케이션의 메인 대시보드 페이지입니다.
+ * 오늘 경기, 출석 인원, 회비 잔액, 월별 통계 등을 표시합니다.
+ *
+ * 사용하는 컴포넌트:
+ * - OverviewCard: 통계 정보 카드 표시
+ * - RecentMatchCard: 최근 경기 결과 표시
+ * - MiniChart: 월별 출석 통계 그래프 표시
+ *
+ * 사용하는 유틸리티:
+ * - calcBalance: 회비 잔액 계산
+ */
 import { matches } from '@/data/matches';
 import { records } from '@/data/records';
 import { calcBalance } from '@/utils/calcBalance';

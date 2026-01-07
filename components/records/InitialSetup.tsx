@@ -35,9 +35,14 @@ interface InitialSetupProps {
 
 /**
  * 초기 설정 컴포넌트
+ *
+ * 팀과 선수를 등록하는 모달 컴포넌트입니다.
  * - 팀 이름과 선수 이름을 등록
  * - 회원 명단에서 선수를 선택할 수 있음
  * - 이미 다른 팀에 등록된 선수들은 체크된 상태로 표시
+ *
+ * 사용처:
+ * - app/records/page.tsx: 기록지 페이지에서 팀 추가 모달로 사용
  */
 const POSITIONS = ["FW", "MF", "DF", "GK"] as const;
 

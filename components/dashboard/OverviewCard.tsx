@@ -1,3 +1,11 @@
+/**
+ * 대시보드 개요 카드 컴포넌트
+ *
+ * 통계 정보를 카드 형태로 표시하는 재사용 가능한 컴포넌트입니다.
+ *
+ * 사용처:
+ * - app/page.tsx: 대시보드 메인 페이지에서 출석 인원, 회비 잔액, 전체 경기 수 등 통계 표시
+ */
 interface OverviewCardProps {
   title: string;
   value: string | number;

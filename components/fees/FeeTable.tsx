@@ -1,32 +1,9 @@
 import { fees } from "@/data/fees";
+import { groupFeesByMonth } from "@/utils/groupFeesByMonth";
 
 export default function FeeTable() {
-  // 월별로 그룹화
-  const groupedFees = fees.reduce((acc, fee) => {
-    const month = fee.date.substring(0, 7); // YYYY-MM
-    if (!acc[month]) {
-      acc[month] = [];
-    }
-    acc[month].push(fee);
-    return acc;
-  }, {} as Record<string, typeof fees>);
-
-  const months = Object.keys(groupedFees).sort().reverse();
-
-  // 월별 수입/지출 계산
-  const monthlySummary = months.map((month) => {
-    const monthFees = groupedFees[month];
-    const income = monthFees.filter((f) => f.type === "INCOME").reduce((sum, f) => sum + f.amount, 0);
-    const expense = monthFees.filter((f) => f.type === "EXPENSE").reduce((sum, f) => sum + f.amount, 0);
-
-    return {
-      month,
-      income,
-      expense,
-      net: income - expense,
-      fees: monthFees,
-    };
-  });
+  // 월별 그룹화 및 요약 계산 (유틸리티 함수 사용)
+  const monthlySummary = groupFeesByMonth(fees);
 
   return (
     <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">

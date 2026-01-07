@@ -1,9 +1,15 @@
 /**
  * 회원(선수) API 서비스
- * - 회원 목록 조회
+ *
+ * 회원(선수) 관련 API 호출을 담당하는 서비스 모듈입니다.
  *
  * 엔드포인트: GET https://jochukback-production.up.railway.app/players
  * 응답: JSON 배열 [{ id, name, createdAt }, ...]
+ *
+ * 사용처:
+ * - app/records/page.tsx: 초기 설정 시 선수 목록 조회 및 playerId 매핑
+ * - components/records/AttendanceTable.tsx: 출석 테이블에서 선수 목록 조회
+ * - components/records/InitialSetup.tsx: 초기 설정 모달에서 선수 목록 조회
  */
 
 import { apiGet } from "@/lib/api";

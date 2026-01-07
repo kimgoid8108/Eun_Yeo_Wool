@@ -21,10 +21,15 @@ interface MemberSelectionProps {
 
 /**
  * 회원 명단 선택 컴포넌트
+ *
+ * 회원 목록에서 선수를 선택하는 컴포넌트입니다.
  * - 회원 목록을 체크박스로 표시
  * - 전체 선택/해제 기능
  * - 검색 기능으로 선수 빠르게 찾기
  * - 이미 등록된 선수는 체크 표시만 (선수 목록에는 추가되지 않음)
+ *
+ * 사용처:
+ * - components/records/InitialSetup.tsx: 초기 설정 모달에서 회원 선택 컴포넌트로 사용
  */
 export default function MemberSelection({
   members,

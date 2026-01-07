@@ -7,7 +7,11 @@ interface ViewModeToggleProps {
 
 /**
  * 보기 모드 토글 컴포넌트
- * - 경기 기록 / 경기 결과 모드 전환
+ *
+ * 경기 기록과 경기 결과 모드를 전환하는 컴포넌트입니다.
+ *
+ * 사용처:
+ * - app/records/page.tsx: 기록지 페이지에서 보기 모드 전환
  */
 export default function ViewModeToggle({ viewMode, onModeChange }: ViewModeToggleProps) {
   return (

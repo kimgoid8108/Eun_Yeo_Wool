@@ -1,3 +1,11 @@
+/**
+ * 최근 경기 카드 컴포넌트
+ *
+ * 최근 경기 결과를 카드 형태로 표시하는 컴포넌트입니다.
+ *
+ * 사용처:
+ * - app/page.tsx: 대시보드 메인 페이지에서 최근 경기 결과 표시
+ */
 import { matches } from '@/data/matches';
 import { players } from '@/data/players';
 

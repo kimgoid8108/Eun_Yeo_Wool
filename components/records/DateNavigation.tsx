@@ -20,9 +20,14 @@ interface DateNavigationProps {
 
 /**
  * 날짜 네비게이션 컴포넌트
+ *
+ * 날짜 선택 및 이동 기능을 제공하는 컴포넌트입니다.
  * - 화살표 버튼으로 날짜 이동
  * - 드롭다운으로 날짜 직접 선택
  * - 스와이프 제스처 지원
+ *
+ * 사용처:
+ * - app/records/page.tsx: 기록지 페이지에서 날짜 선택 및 네비게이션
  */
 export default function DateNavigation({
   days,

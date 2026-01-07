@@ -1,6 +1,22 @@
 /**
  * 경기 기록 API 서비스
+ *
+ * 경기 기록, 팀 정보, 선수 기록 등 관련 API 호출을 담당하는 서비스 모듈입니다.
+ *
+ * 주요 기능:
  * - 팀 정보 및 경기 결과 CRUD 작업
+ * - 날짜별 경기 기록 조회
+ * - 선수 경기 기록 저장 및 조회
+ *
+ * 사용처:
+ * - app/records/page.tsx: 기록지 페이지의 모든 데이터 CRUD 작업
+ *   - getRecordsByDate: 날짜별 기록 조회
+ *   - createTeamOnly: 팀 생성
+ *   - addPlayerToTeam: 팀에 선수 추가
+ *   - createMatch, updateMatch, deleteMatch: 경기 결과 관리
+ * - components/records/AttendanceTable.tsx: 출석 기록 저장 및 조회
+ *   - savePlayerRecord: 선수 출석 기록 저장
+ *   - getPlayerRecords: 날짜별 선수 기록 조회
  */
 
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";

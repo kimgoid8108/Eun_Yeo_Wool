@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import AttendanceTable from "@/components/records/AttendanceTable";
 import InitialSetup from "@/components/records/InitialSetup";
 import DateNavigation from "@/components/records/DateNavigation";
@@ -8,172 +8,72 @@ import ViewModeToggle from "@/components/records/ViewModeToggle";
 import EmptyTeamMessage from "@/components/records/EmptyTeamMessage";
 import MatchResultView from "@/components/records/MatchResultView";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
-import { days as initialDays, Day } from "@/data/days";
-import { TeamInfo, ViewMode, MatchScore } from "@/types/records";
+import { useDateManagement } from "@/hooks/useDateManagement";
+import { useRecordsData } from "@/hooks/useRecordsData";
+import { useMatchOperations } from "@/hooks/useMatchOperations";
+import { days as initialDays } from "@/data/days";
+import { ViewMode } from "@/types/records";
 import * as recordsService from "@/services/recordsService";
-import { TeamResponse, MatchResponse, Player } from "@/types/api";
+import { Player } from "@/types/api";
 import { ApiError } from "@/lib/api";
 import { getPlayers } from "@/services/playersService";
 import AddDateModal from "@/components/records/AddDateModal";
 
 /**
  * 기록지 페이지
- * - 날짜별 경기 기록을 조회하고 편집할 수 있는 페이지
+ *
+ * 날짜별 경기 기록을 조회하고 편집할 수 있는 페이지입니다.
  * - 화살표 버튼 또는 스와이프로 날짜 이동 가능
  * - 드롭다운으로 날짜 직접 선택 가능
+ * - 팀 추가 및 경기 결과 관리 기능 제공
+ *
+ * 사용하는 커스텀 훅:
+ * - useDateManagement: 날짜 목록 및 선택 관리
+ * - useRecordsData: 날짜별 팀 및 경기 데이터 관리
+ * - useMatchOperations: 경기 CRUD 작업 관리
+ * - useSwipeGesture: 스와이프 제스처 처리
  */
-
 export default function RecordsPage() {
-  // 날짜별 팀 정보 (날짜 ID를 키로 사용)
-  const [teamsByDate, setTeamsByDate] = useState<Record<string, TeamInfo[]>>({});
-  // 날짜별 경기 결과 (날짜 ID를 키로 사용)
-  const [matchesByDate, setMatchesByDate] = useState<Record<string, MatchScore[]>>({});
   // 초기 설정 모달 열림 여부
   const [isSetupModalOpen, setIsSetupModalOpen] = useState<boolean>(false);
-  // 로딩 상태
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  // 팀 ID 매핑 (API에서 받은 ID를 저장)
-  const [teamIdMap, setTeamIdMap] = useState<Record<string, Record<string, string | number>>>({});
-
-  // 날짜 목록 (동적으로 관리, 초기값은 data/days.ts에서 가져옴)
-  const [days, setDays] = useState<Day[]>(initialDays);
-  // 선택된 날짜 ID (days.id를 저장)
-  const [selectedDateId, setSelectedDateId] = useState<string>("");
-  // 날짜 드롭다운 열림/닫힘 상태
-  const [isDateDropdownOpen, setIsDateDropdownOpen] = useState(false);
-  // 날짜 추가 모달 열림/닫힘 상태
-  const [isAddDateModalOpen, setIsAddDateModalOpen] = useState<boolean>(false);
   // 현재 보기 모드 (records: 경기 기록, result: 경기 결과)
   const [viewMode, setViewMode] = useState<ViewMode>("records");
 
-  // 날짜별 데이터 불러오기 (API)
-  const loadRecordsByDate = useCallback(async (dateId: string) => {
-    if (!dateId) return;
+  // 날짜 관리 커스텀 훅 사용
+  const {
+    days,
+    selectedDateId,
+    isDateDropdownOpen,
+    setIsDateDropdownOpen,
+    isAddDateModalOpen,
+    setIsAddDateModalOpen,
+    handleAddDate,
+    handleOpenAddDateModal,
+    handlePreviousDate,
+    handleNextDate,
+    handleDateSelect,
+  } = useDateManagement(initialDays);
 
-    setIsLoading(true);
-    try {
-      console.log("[RecordsPage] Loading records for dateId:", dateId);
+  // 기록 데이터 관리 커스텀 훅 사용
+  const {
+    teamsByDate,
+    setTeamsByDate,
+    matchesByDate,
+    setMatchesByDate,
+    isLoading,
+    setIsLoading,
+    teamIdMap,
+    setTeamIdMap,
+  } = useRecordsData(selectedDateId, days);
 
-      // dateId를 숫자로 변환 (days.dateId 사용)
-      const day = days.find(d => d.id === dateId);
-      const numericDateId = day?.dateId ? day.dateId : parseInt(dateId, 10);
+  // 경기 CRUD 작업 커스텀 훅 사용
+  const { handleAddMatch, handleUpdateMatch, handleDeleteMatch } = useMatchOperations(
+    selectedDateId,
+    matchesByDate,
+    setMatchesByDate,
+    setIsLoading
+  );
 
-      // API 호출 시 숫자 dateId 사용
-      const response = await recordsService.getRecordsByDate(String(numericDateId));
-      console.log("[RecordsPage] API Response:", response);
-
-      // 팀 정보 변환 (TeamResponse -> TeamInfo)
-      const teams: TeamInfo[] = response.teams.map((team) => ({
-        teamName: team.teamName,
-        players: team.players,
-      }));
-
-      // 팀 ID 매핑 저장
-      setTeamIdMap((prev) => {
-        const newDateMap: Record<string, string | number> = response.teams.reduce((acc, team) => {
-          acc[team.teamName] = team.id;
-          return acc;
-        }, {} as Record<string, string | number>);
-
-        return {
-          ...prev,
-          [dateId]: newDateMap,
-        };
-      });
-
-      // 경기 결과 변환 (MatchResponse -> MatchScore)
-      const matches: MatchScore[] = response.matches.map((match) => ({
-        id: match.id,
-        team1Name: match.team1Name,
-        team1Score: match.team1Score,
-        team1Result: match.team1Result,
-        team2Name: match.team2Name,
-        team2Score: match.team2Score,
-        team2Result: match.team2Result,
-      }));
-
-      setTeamsByDate((prev) => ({
-        ...prev,
-        [dateId]: teams,
-      }));
-
-      setMatchesByDate((prev) => ({
-        ...prev,
-        [dateId]: matches,
-      }));
-    } catch (error) {
-      // 에러 메시지 추출
-      let errorMessage = "알 수 없는 오류가 발생했습니다.";
-      let errorDetails: Record<string, unknown> = {};
-
-      if (error instanceof ApiError) {
-        errorMessage = error.message;
-        errorDetails = {
-          type: error.type,
-          status: error.status,
-          url: error.url,
-          responseText: error.responseText,
-        };
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-        errorDetails = { name: error.name };
-      } else if (error && typeof error === "object" && "message" in error) {
-        errorMessage = String(error.message);
-      }
-
-      console.error("[RecordsPage] Failed to load records:", {
-        errorMessage,
-        errorDetails,
-        originalError: error,
-      });
-
-      // 에러 발생 시 빈 배열로 초기화 (팀이 없는 상태)
-      setTeamsByDate((prev) => ({
-        ...prev,
-        [dateId]: [],
-      }));
-      setMatchesByDate((prev) => ({
-        ...prev,
-        [dateId]: [],
-      }));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // 선택된 날짜가 변경될 때마다 데이터 불러오기
-  useEffect(() => {
-    if (selectedDateId) {
-      loadRecordsByDate(selectedDateId);
-    }
-  }, [selectedDateId, loadRecordsByDate]);
-
-  // 초기화: 가장 최근 날짜를 기본값으로 설정
-  useEffect(() => {
-    if (days.length > 0 && !selectedDateId) {
-      setSelectedDateId(days[days.length - 1].id);
-    }
-  }, [selectedDateId, days]);
-
-  // 날짜 추가 핸들러
-  const handleAddDate = useCallback((newDay: Day) => {
-    setDays((prev) => {
-      // 중복 체크
-      if (prev.some((day) => day.dateId === newDay.dateId)) {
-        return prev;
-      }
-      // 날짜 순서대로 정렬하여 추가
-      const updated = [...prev, newDay].sort((a, b) => a.dateId - b.dateId);
-      return updated;
-    });
-    // 새로 추가된 날짜를 선택
-    setSelectedDateId(newDay.id);
-  }, []);
-
-  // 날짜 추가 모달 열기
-  const handleOpenAddDateModal = useCallback(() => {
-    setIsAddDateModalOpen(true);
-  }, []);
 
   // 초기 설정 완료 핸들러
   const handleInitialSetupComplete = useCallback(
@@ -301,160 +201,6 @@ export default function RecordsPage() {
     });
   }, [teamsByDate, matchesByDate]);
 
-  // 경기 추가 핸들러
-  const handleAddMatch = useCallback(
-    async (match: MatchScore) => {
-      if (!selectedDateId) return;
-
-      setIsLoading(true);
-      try {
-        // API로 경기 추가
-        const response = await recordsService.createMatch({
-          dateId: selectedDateId,
-          team1Name: match.team1Name,
-          team1Score: match.team1Score,
-          team2Name: match.team2Name,
-          team2Score: match.team2Score,
-        });
-
-        // 상태 업데이트
-        setMatchesByDate((prev) => {
-          const currentDateMatches = prev[selectedDateId] || [];
-          return {
-            ...prev,
-            [selectedDateId]: [
-              ...currentDateMatches,
-              {
-                id: response.id,
-                team1Name: response.team1Name,
-                team1Score: response.team1Score,
-                team1Result: response.team1Result,
-                team2Name: response.team2Name,
-                team2Score: response.team2Score,
-                team2Result: response.team2Result,
-              },
-            ],
-          };
-        });
-      } catch (error) {
-        const errorMessage = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "경기 추가 중 오류가 발생했습니다.";
-        console.error("[RecordsPage] Failed to create match:", {
-          errorMessage,
-          error,
-        });
-        alert(errorMessage);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [selectedDateId]
-  );
-
-  // 경기 수정 핸들러
-  const handleUpdateMatch = useCallback(
-    async (matchId: string, match: MatchScore) => {
-      if (!selectedDateId) return;
-
-      setIsLoading(true);
-      try {
-        // API로 경기 수정
-        const response = await recordsService.updateMatch(matchId, {
-          dateId: selectedDateId,
-          team1Name: match.team1Name,
-          team1Score: match.team1Score,
-          team2Name: match.team2Name,
-          team2Score: match.team2Score,
-        });
-
-        // 상태 업데이트
-        setMatchesByDate((prev) => {
-          const currentDateMatches = prev[selectedDateId] || [];
-          return {
-            ...prev,
-            [selectedDateId]: currentDateMatches.map((m) =>
-              m.id === matchId
-                ? {
-                    id: response.id,
-                    team1Name: response.team1Name,
-                    team1Score: response.team1Score,
-                    team1Result: response.team1Result,
-                    team2Name: response.team2Name,
-                    team2Score: response.team2Score,
-                    team2Result: response.team2Result,
-                  }
-                : m
-            ),
-          };
-        });
-      } catch (error) {
-        const errorMessage = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "경기 수정 중 오류가 발생했습니다.";
-        console.error("[RecordsPage] Failed to update match:", {
-          errorMessage,
-          error,
-        });
-        alert(errorMessage);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [selectedDateId]
-  );
-
-  // 경기 삭제 핸들러
-  const handleDeleteMatch = useCallback(
-    async (matchId: string) => {
-      if (!selectedDateId) return;
-
-      setIsLoading(true);
-      try {
-        // API로 경기 삭제
-        await recordsService.deleteMatch(matchId);
-
-        // 상태 업데이트
-        setMatchesByDate((prev) => {
-          const currentDateMatches = prev[selectedDateId] || [];
-          return {
-            ...prev,
-            [selectedDateId]: currentDateMatches.filter((m) => m.id !== matchId),
-          };
-        });
-      } catch (error) {
-        const errorMessage = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "경기 삭제 중 오류가 발생했습니다.";
-        console.error("[RecordsPage] Failed to delete match:", {
-          errorMessage,
-          error,
-        });
-        alert(errorMessage);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [selectedDateId]
-  );
-
-  // 현재 날짜의 인덱스 (useMemo로 최적화)
-  const currentDateIndex = useMemo(() => {
-    return days.findIndex((d) => d.id === selectedDateId);
-  }, [selectedDateId]);
-
-  // 이전 날짜로 이동 핸들러
-  const handlePreviousDate = useCallback(() => {
-    if (currentDateIndex > 0) {
-      setSelectedDateId(days[currentDateIndex - 1].id);
-    }
-  }, [currentDateIndex]);
-
-  // 다음 날짜로 이동 핸들러
-  const handleNextDate = useCallback(() => {
-    if (currentDateIndex < days.length - 1) {
-      setSelectedDateId(days[currentDateIndex + 1].id);
-    }
-  }, [currentDateIndex]);
-
-  // 드롭다운에서 날짜 선택 핸들러
-  const handleDateSelect = useCallback((dayId: string) => {
-    setSelectedDateId(dayId);
-  }, []);
 
   // 스와이프 제스처 훅
   const { onTouchStart, onTouchMove, onTouchEnd } = useSwipeGesture({
