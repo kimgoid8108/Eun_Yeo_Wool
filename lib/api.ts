@@ -5,7 +5,7 @@
  */
 
 // 환경변수 로드 확인
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://jochukback-production.up.railway.app";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://jochukback.onrender.com";
 
 // 환경변수 로드 상태 로깅 (항상 표시하여 문제 진단 용이)
 if (typeof window === "undefined") {
