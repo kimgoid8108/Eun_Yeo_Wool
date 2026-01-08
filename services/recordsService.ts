@@ -286,19 +286,19 @@ export async function savePlayerRecord(data: { playerId: number; teamId: number;
  */
 export async function getPlayerRecords(dateId: number): Promise<PlayerRecordResponse[]> {
   console.log("[recordsService] Fetching player records:", {
-    endpoint: "/player-records",
+    endpoint: "/player-records/:dateId",
     dateId,
   });
 
   try {
-    const response = await apiGet<PlayerRecordResponse[]>("/player-records", {
+    const response = await apiGet<PlayerRecordResponse[]>("/player-records/:dateId", {
       dateId,
     });
     console.log("[recordsService] Player records fetched successfully:", response);
     return response;
   } catch (error) {
     console.error("[recordsService] Failed to fetch player records:", {
-      endpoint: "/player-records",
+      endpoint: "/player-records/:dateId",
       dateId,
       error,
     });

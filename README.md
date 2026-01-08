@@ -5,6 +5,7 @@
 ## 프로젝트 구조
 
 ### 앱 라우터 (app/)
+
 - `app/page.tsx` - 대시보드 메인 페이지
 - `app/records/page.tsx` - 경기 기록 페이지
 - `app/executives/page.tsx` - 회원명단 페이지
@@ -16,15 +17,18 @@
 ### 컴포넌트 (components/)
 
 #### 대시보드 컴포넌트 (components/dashboard/)
+
 - `OverviewCard.tsx` - 통계 정보 카드 (사용처: app/page.tsx)
 - `RecentMatchCard.tsx` - 최근 경기 카드 (사용처: app/page.tsx)
 - `MiniChart.tsx` - 미니 차트 (사용처: app/page.tsx)
 
 #### 레이아웃 컴포넌트 (components/layout/)
+
 - `Header.tsx` - 상단 헤더 (사용처: app/layout.tsx)
 - `Sidebar.tsx` - 사이드바 네비게이션 (사용처: app/layout.tsx)
 
 #### 기록 컴포넌트 (components/records/)
+
 - `AttendanceTable.tsx` - 출석 테이블 (사용처: app/records/page.tsx)
 - `DateNavigation.tsx` - 날짜 네비게이션 (사용처: app/records/page.tsx)
 - `ViewModeToggle.tsx` - 보기 모드 토글 (사용처: app/records/page.tsx)
@@ -37,15 +41,18 @@
 - `PlayerList.tsx` - 선수 목록 컴포넌트 (사용처: components/records/InitialSetup.tsx)
 
 #### 회비 컴포넌트 (components/fees/)
+
 - `FeeSummaryCard.tsx` - 회비 요약 카드 (사용처: app/fees/page.tsx)
 - `FeeTable.tsx` - 회비 테이블 (사용처: app/fees/page.tsx)
 - `ExpenseTable.tsx` - 지출 내역 테이블 (사용처: app/fees/history/page.tsx)
 
 #### 임원 컴포넌트 (components/executives/)
+
 - `ExecutiveCard.tsx` - 임원 카드 (사용처: app/executives/page.tsx)
 - `MemberCard.tsx` - 회원 카드 (사용처: app/executives/page.tsx)
 
 ### 커스텀 훅 (hooks/)
+
 - `useSwipeGesture.ts` - 스와이프 제스처 처리 (사용처: app/records/page.tsx)
 - `useDateManagement.ts` - 날짜 관리 (사용처: app/records/page.tsx)
 - `useRecordsData.ts` - 기록 데이터 관리 (사용처: app/records/page.tsx)
@@ -57,24 +64,29 @@
 - `usePlayerStatsSave.ts` - 선수 통계 저장 관리 (사용처: components/records/AttendanceTable.tsx)
 
 ### 유틸리티 함수 (utils/)
+
 - `calcBalance.ts` - 회비 잔액 계산 (사용처: app/page.tsx, components/fees/FeeSummaryCard.tsx)
 - `calcTotalPoint.ts` - 선수 총점 계산 (현재 미사용, 향후 사용 예정)
 - `groupFeesByMonth.ts` - 회비 데이터 월별 그룹화 (사용처: components/fees/FeeTable.tsx)
 - `playerStatsUtils.ts` - 선수 통계 유틸리티 함수 (사용처: components/records/AttendanceTable.tsx, hooks/)
 
 ### 서비스 (services/)
+
 - `playersService.ts` - 선수 API 서비스 (사용처: app/records/page.tsx, components/records/AttendanceTable.tsx, components/records/InitialSetup.tsx)
 - `recordsService.ts` - 기록 API 서비스 (사용처: app/records/page.tsx, components/records/AttendanceTable.tsx)
 
 ### 타입 정의 (types/)
+
 - `api.ts` - API 관련 타입 정의
 - `records.ts` - 기록 관련 타입 정의
 - `playerStats.ts` - 선수 통계 관련 타입 정의 (사용처: components/records/AttendanceTable.tsx, hooks/)
 
 ### 라이브러리 (lib/)
+
 - `api.ts` - API 클라이언트 설정 (사용처: 모든 서비스 모듈에서 간접 사용)
 
 ### 데이터 (data/)
+
 - `days.ts` - 날짜 데이터
 - `players.ts` - 선수 데이터
 - `matches.ts` - 경기 데이터
@@ -86,6 +98,7 @@
 ## 주요 기능
 
 ### 대시보드
+
 - 오늘 경기 요약
 - 출석 인원 통계
 - 회비 잔액 표시
@@ -93,6 +106,7 @@
 - 최근 경기 결과
 
 ### 경기 기록
+
 - 날짜별 경기 기록 관리
 - 팀 추가 및 선수 등록
 - 출석 체크 및 통계 입력
@@ -100,11 +114,13 @@
 - 스와이프 제스처로 날짜 이동
 
 ### 회비 관리
+
 - 회비 수입/지출 기록
 - 월별 회비 요약
 - 회비 사용내역 조회
 
 ### 회원 관리
+
 - 회원명단 조회
 - 임원 정보 표시
 
@@ -122,13 +138,6 @@
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
 
 브라우저에서 [http://localhost:3000](http://localhost:3000)을 열어 확인하세요.
 
@@ -137,7 +146,9 @@ bun dev
 프로젝트 루트에 `.env.local` 파일을 생성하고 다음 내용을 추가하세요:
 
 ```
+
 NEXT_PUBLIC_API_BASE_URL=https://jochukback-production.up.railway.app
+
 ```
 
 환경 변수 변경 후 개발 서버를 재시작해야 합니다.
@@ -164,3 +175,4 @@ NEXT_PUBLIC_API_BASE_URL=https://jochukback-production.up.railway.app
 ## 라이선스
 
 이 프로젝트는 개인 프로젝트입니다.
+```
