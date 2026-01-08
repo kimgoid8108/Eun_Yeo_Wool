@@ -22,11 +22,67 @@
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import { TeamRequest, TeamResponse, MatchCreateRequest, MatchUpdateRequest, MatchResponse, DateRecordsResponse, PlayerRecordRequest, PlayerRecordResponse, MatchRecordsResponse } from "@/types/api";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://jochukback.onrender.com";
+
 /**
  * 특정 날짜의 경기 기록 조회
  */
 export async function getRecordsByDate(dateId: string): Promise<DateRecordsResponse> {
-  return apiGet<DateRecordsResponse>(`/records/${dateId}`);
+  // 프론트에서 전달되는 dateId는 밀리초 타임스탬프입니다.
+  // 백엔드에 존재하는 엔드포인트들을 조합해 DateRecordsResponse 형태로 만들어 반환합니다.
+  const numeric = Number(dateId);
+  const KST_OFFSET = 9 * 60 * 60 * 1000;
+  const d = new Date(numeric + KST_OFFSET);
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  const dateStr = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+
+  // 1) 해당 날짜의 Matches 조회 (백엔드: /matches/:YYYY-MM-DD)
+  // 1) 우선적으로 날짜별 Matches 엔드포인트 시도
+  let matches = await apiGet<any[]>(`/matches/${dateStr}`);
+
+  // 1a) 만약 엔드포인트가 비어있거나 지원하지 않으면 전체 조회 후 필터링
+  if (!Array.isArray(matches) || matches.length === 0) {
+    try {
+      const allMatches = await apiGet<any[]>(`/matches`);
+      matches = (allMatches || []).filter((m) => m.matchDate === dateStr);
+    } catch (e) {
+      matches = [];
+    }
+  }
+  const playerRecords = await apiGet<any[]>(`/player-records`, { dateId: numeric });
+
+  // 3) teams 구성: playerRecords를 teamId로 그룹화하여 팀과 선수 배열 생성
+  const teamsMap: Record<string, any> = {};
+  for (const rec of playerRecords) {
+    const key = String(rec.teamId || "__no_team");
+    if (!teamsMap[key]) {
+      teamsMap[key] = {
+        id: rec.team?.id ?? null,
+        teamName: rec.team?.teamName ?? `팀_${rec.teamId ?? "unknown"}`,
+        dateId: dateStr,
+        players: [],
+      };
+    }
+    if (rec.player) {
+      teamsMap[key].players.push(rec.player);
+    }
+  }
+
+  const teams = Object.values(teamsMap);
+
+  // 4) matches 변환: 백엔드 Matches 엔티티를 프론트 타입(간단 매핑)으로 변환
+  const mappedMatches = matches.map((m) => ({
+    id: String(m.id),
+    matchDate: m.matchDate ?? m.matchDate,
+    matchOrder: m.matchOrder ?? m.match_order ?? null,
+    teamId: m.teamId ?? m.team_id ?? null,
+    createdAt: m.createdAt ?? m.created_at ?? null,
+  }));
+
+  return {
+    teams,
+    matches: matches,
+  } as DateRecordsResponse;
 }
 
 /**
@@ -35,16 +91,16 @@ export async function getRecordsByDate(dateId: string): Promise<DateRecordsRespo
  */
 export async function getAllMatchRecords(): Promise<MatchRecordsResponse[]> {
   console.log("[recordsService] Fetching all match records:", {
-    endpoint: "/match-records",
+    endpoint: `/match-records`,
   });
 
   try {
-    const response = await apiGet<MatchRecordsResponse[]>("/match-records");
+    const response = await apiGet<MatchRecordsResponse[]>(`/match-records`);
     console.log("[recordsService] All match records fetched successfully:", response);
     return response;
   } catch (error) {
     console.error("[recordsService] Failed to fetch all match records:", {
-      endpoint: "/match-records",
+      endpoint: `/match-records`,
       error,
     });
     // 에러 발생 시 빈 배열 반환
@@ -59,19 +115,19 @@ export async function getAllMatchRecords(): Promise<MatchRecordsResponse[]> {
  */
 export async function createTeamOnly(name: string): Promise<{ id: number }> {
   console.log("[recordsService] Creating team:", {
-    endpoint: "/teams",
+    endpoint: `/teams`,
     name,
   });
 
   try {
-    const response = await apiPost<{ id: number }>("/teams", {
+    const response = await apiPost<{ id: number }>(`/teams`, {
       teamName: name,
     });
     console.log("[recordsService] Team created successfully:", response);
     return response;
   } catch (error) {
     console.error("[recordsService] Failed to create team:", {
-      endpoint: "/teams",
+      endpoint: `/teams`,
       name,
       error,
     });
@@ -86,14 +142,14 @@ export async function createTeamOnly(name: string): Promise<{ id: number }> {
  */
 export async function addPlayerToTeam(teamId: number, playerId: number, joinedAt: string): Promise<void> {
   console.log("[recordsService] Adding player to team:", {
-    endpoint: "/team-players",
+    endpoint: `/team-players`,
     teamId,
     playerId,
     joinedAt,
   });
 
   try {
-    await apiPost<void>("/team-players", {
+    await apiPost<void>(`/team-players`, {
       teamId,
       playerId,
       joinedAt,
@@ -101,7 +157,7 @@ export async function addPlayerToTeam(teamId: number, playerId: number, joinedAt
     console.log("[recordsService] Player added successfully:", { teamId, playerId });
   } catch (error) {
     console.error("[recordsService] Failed to add player to team:", {
-      endpoint: "/team-players",
+      endpoint: `/team-players`,
       teamId,
       playerId,
       joinedAt,
@@ -118,18 +174,18 @@ export async function addPlayerToTeam(teamId: number, playerId: number, joinedAt
  */
 export async function createTeam(data: TeamRequest): Promise<TeamResponse> {
   console.log("[recordsService] Creating team:", {
-    endpoint: "/team-players",
+    endpoint: `/team-players`,
     data,
     dataStringified: JSON.stringify(data),
   });
 
   try {
-    const response = await apiPost<TeamResponse>("/team-players", data);
+    const response = await apiPost<TeamResponse>(`/team-players`, data);
     console.log("[recordsService] Team created successfully:", response);
     return response;
   } catch (error) {
     console.error("[recordsService] Failed to create team:", {
-      endpoint: "/team-players",
+      endpoint: `/team-players`,
       data,
       error,
     });
@@ -155,7 +211,7 @@ export async function deleteTeam(teamId: string): Promise<void> {
  * 경기 결과 추가
  */
 export async function createMatch(data: MatchCreateRequest): Promise<MatchResponse> {
-  return apiPost<MatchResponse>("/matches", data);
+  return apiPost<MatchResponse>(`/matches`, data);
 }
 
 /**
