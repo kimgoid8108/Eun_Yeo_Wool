@@ -19,27 +19,11 @@ import { ApiError } from "@/lib/api";
 import { getPlayers } from "@/services/playersService";
 import AddDateModal from "@/components/records/AddDateModal";
 
-/**
- * 기록지 페이지
- *
- * 날짜별 경기 기록을 조회하고 편집할 수 있는 페이지입니다.
- * - 화살표 버튼 또는 스와이프로 날짜 이동 가능
- * - 드롭다운으로 날짜 직접 선택 가능
- * - 팀 추가 및 경기 결과 관리 기능 제공
- *
- * 사용하는 커스텀 훅:
- * - useDateManagement: 날짜 목록 및 선택 관리
- * - useRecordsData: 날짜별 팀 및 경기 데이터 관리
- * - useMatchOperations: 경기 CRUD 작업 관리
- * - useSwipeGesture: 스와이프 제스처 처리
- */
 export default function RecordsPage() {
-  // 초기 설정 모달 열림 여부
-  const [isSetupModalOpen, setIsSetupModalOpen] = useState<boolean>(false);
-  // 현재 보기 모드 (records: 경기 기록, result: 경기 결과)
+  const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("records");
 
-  // 날짜 관리 커스텀 훅 사용
+  /** 날짜 관리 */
   const {
     days,
     selectedDateId,
@@ -54,155 +38,128 @@ export default function RecordsPage() {
     handleDateSelect,
   } = useDateManagement(initialDays);
 
-  // 기록 데이터 관리 커스텀 훅 사용
-  const {
-    teamsByDate,
-    setTeamsByDate,
-    matchesByDate,
-    setMatchesByDate,
-    isLoading,
-    setIsLoading,
-    teamIdMap,
-    setTeamIdMap,
-  } = useRecordsData(selectedDateId, days);
+  /** 기록 데이터 */
+  const { teamsByDate, setTeamsByDate, matchesByDate, setMatchesByDate, isLoading, setIsLoading, teamIdMap, setTeamIdMap, loadRecordsByDate } = useRecordsData(selectedDateId, days);
 
-  // 경기 CRUD 작업 커스텀 훅 사용
-  const { handleAddMatch, handleUpdateMatch, handleDeleteMatch } = useMatchOperations(
-    selectedDateId,
-    matchesByDate,
-    setMatchesByDate,
-    setIsLoading
-  );
+  /** 경기 CRUD */
+  const { handleAddMatch, handleUpdateMatch, handleDeleteMatch } = useMatchOperations(selectedDateId, matchesByDate, setMatchesByDate, setIsLoading, days, teamIdMap, loadRecordsByDate);
 
-
-  // 초기 설정 완료 핸들러
+  /**
+   * 🔥 초기 팀 세팅
+   */
   const handleInitialSetupComplete = useCallback(
     async (teamName: string, players: { name: string; position: string }[]) => {
       if (!selectedDateId) return;
 
       const currentTeams = teamsByDate[selectedDateId] || [];
-      // 최대 2팀까지만 추가 가능
       if (currentTeams.length >= 2) {
         alert("최대 2팀까지만 추가할 수 있습니다.");
         return;
       }
 
       setIsLoading(true);
+
       try {
-        // 1. 선수 목록을 API에서 가져와서 이름으로 playerId 찾기
+        /** 선수 ID 매핑 */
         const apiPlayers = await getPlayers();
         const playerMap = new Map<string, number>();
-        apiPlayers.forEach((player: Player) => {
-          playerMap.set(player.name, player.id);
+        apiPlayers.forEach((p: Player) => {
+          playerMap.set(p.name, p.id);
         });
 
-        // 2. 날짜 정보 가져오기 및 ISO 문자열로 변환
+        /** 날짜 */
         const selectedDay = days.find((d) => d.id === selectedDateId);
-        if (!selectedDay || !selectedDay.dateId) {
+        if (!selectedDay?.dateId) {
           throw new Error("선택한 날짜를 찾을 수 없습니다.");
         }
+        // ✅ 날짜 변환: dateId를 로컬 날짜로 변환하여 타임존 문제 방지
+        const joinedAt = (() => {
+          const date = new Date(selectedDay.dateId);
+          if (isNaN(date.getTime())) {
+            console.error("[RecordsPage] Invalid dateId:", selectedDay.dateId);
+            throw new Error("유효하지 않은 날짜입니다.");
+          }
+          // 로컬 날짜를 YYYY-MM-DD 형식으로 변환 후 ISO 형식으로 변환
+          // 타임존 문제를 피하기 위해 로컬 날짜를 사용
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, "0");
+          const day = String(date.getDate()).padStart(2, "0");
+          // ISO 형식으로 변환 (로컬 시간대 기준)
+          return `${year}-${month}-${day}T00:00:00.000Z`;
+        })();
 
-        // dateId(타임스탬프)를 Date 객체로 변환하여 ISO 문자열 생성
-        const date = new Date(selectedDay.dateId);
-        const joinedAt = date.toISOString();
+        /**
+         * ✅ 팀 이름 중복 허용을 위해 고유한 이름 생성
+         * 서버에 전송: 고유한 이름 (날짜 + 타임스탬프)
+         * UI 표시: 원래 팀 이름
+         */
+        const uniqueTeamName = `${teamName}_${selectedDay.dateId}_${Date.now()}`;
 
-        // 3. 팀 생성 API 호출 (POST /teams)
-        const teamResponse = await recordsService.createTeamOnly(teamName);
-        const teamId = teamResponse.id;
-        if (!teamId || isNaN(teamId)) {
-          throw new Error("팀 생성 후 유효한 teamId를 받지 못했습니다.");
+        /** 팀 생성 */
+        const teamResponse = await recordsService.createTeamOnly(uniqueTeamName);
+
+        if (!teamResponse?.id || isNaN(teamResponse.id)) {
+          throw new Error("유효하지 않은 teamId");
         }
 
-        // 4. 각 선수마다 개별 POST 요청 (Promise.all 사용)
-        const playerRegistrationPromises = players.map(async (player) => {
-          const playerId = playerMap.get(player.name);
-          if (!playerId) {
-            throw new Error(`선수 "${player.name}"의 ID를 찾을 수 없습니다.`);
-          }
-          return recordsService.addPlayerToTeam(teamId, playerId, joinedAt);
-        });
+        const teamId = teamResponse.id;
 
-        await Promise.all(playerRegistrationPromises);
+        /** 선수 등록 */
+        await Promise.all(
+          players.map((player) => {
+            const playerId = playerMap.get(player.name);
+            if (!playerId) {
+              throw new Error(`선수 ID 없음: ${player.name}`);
+            }
+            return recordsService.addPlayerToTeam(teamId, playerId, joinedAt);
+          })
+        );
 
-        // 상태 업데이트
-        setTeamsByDate((prev) => {
-          const currentDateTeams = prev[selectedDateId] || [];
-          return {
-            ...prev,
-            [selectedDateId]: [...currentDateTeams, { teamName, players }],
-          };
-        });
+        /** 상태 업데이트 (UI 기준) */
+        setTeamsByDate((prev) => ({
+          ...prev,
+          [selectedDateId]: [...(prev[selectedDateId] || []), { teamName, players }],
+        }));
 
-        // 팀 ID 매핑 저장
-        setTeamIdMap((prev) => {
-          const currentDateMap = prev[selectedDateId] || {};
-          return {
-            ...prev,
-            [selectedDateId]: {
-              ...currentDateMap,
-              [teamName]: teamResponse.id,
-            },
-          };
-        });
+        /**
+         * 🔥 teamIdMap은 number만 저장
+         */
+        setTeamIdMap((prev) => ({
+          ...prev,
+          [selectedDateId]: {
+            ...(prev[selectedDateId] || {}),
+            [teamName]: teamId,
+          },
+        }));
 
         setIsSetupModalOpen(false);
       } catch (error) {
-        const errorMessage = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "팀 추가 중 오류가 발생했습니다.";
-        console.error("[RecordsPage] Failed to create team:", {
-          errorMessage,
-          error,
-        });
-        alert(errorMessage);
+        const msg = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "팀 추가 중 오류 발생";
+        console.error("[RecordsPage] Failed:", error);
+        alert(msg);
       } finally {
         setIsLoading(false);
       }
     },
-    [selectedDateId, teamsByDate]
+    [selectedDateId, teamsByDate, days, setIsLoading, setTeamsByDate, setTeamIdMap]
   );
 
-  // 현재 날짜의 팀 목록
-  const currentTeams = useMemo(() => {
-    return teamsByDate[selectedDateId] || [];
-  }, [teamsByDate, selectedDateId]);
+  /** 메모들 */
+  const currentTeams = useMemo(() => teamsByDate[selectedDateId] || [], [teamsByDate, selectedDateId]);
 
-  // 팀 추가 가능 여부 (최대 2팀)
-  const canAddTeam = useMemo(() => {
-    return currentTeams.length < 2;
-  }, [currentTeams.length]);
+  const canAddTeam = currentTeams.length < 2;
 
-  // 현재 날짜에 이미 등록된 선수 이름 목록 (다른 팀에서 선택한 선수들)
   const registeredPlayerNames = useMemo(() => {
-    const names = new Set<string>();
-    currentTeams.forEach((team) => {
-      team.players.forEach((player) => {
-        names.add(player.name);
-      });
-    });
-    return Array.from(names);
+    const set = new Set<string>();
+    currentTeams.forEach((t) => t.players.forEach((p) => set.add(p.name)));
+    return [...set];
   }, [currentTeams]);
 
-  // 현재 날짜의 팀 이름 목록
-  const currentTeamNames = useMemo(() => {
-    return currentTeams.map((team) => team.teamName);
-  }, [currentTeams]);
+  const currentTeamNames = currentTeams.map((t) => t.teamName);
 
-  // 현재 날짜의 경기 목록
-  const currentMatches = useMemo(() => {
-    return matchesByDate[selectedDateId] || [];
-  }, [matchesByDate, selectedDateId]);
+  const currentMatches = matchesByDate[selectedDateId] || [];
 
-  // 실제 데이터가 있는 날짜만 필터링 (더미 데이터 제거)
-  const availableDays = useMemo(() => {
-    return days.filter((day) => {
-      const teams = teamsByDate[day.id] || [];
-      const matches = matchesByDate[day.id] || [];
-      // 팀이나 경기 데이터가 있는 날짜만 표시
-      return teams.length > 0 || matches.length > 0;
-    });
-  }, [teamsByDate, matchesByDate]);
-
-
-  // 스와이프 제스처 훅
+  /** 스와이프 */
   const { onTouchStart, onTouchMove, onTouchEnd } = useSwipeGesture({
     onSwipeLeft: handleNextDate,
     onSwipeRight: handlePreviousDate,
@@ -210,91 +167,46 @@ export default function RecordsPage() {
 
   return (
     <div className="p-6">
-      {/* 페이지 제목 */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">기록지</h1>
-        {isLoading && (
-          <div className="text-sm text-gray-500 flex items-center gap-2">
-            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            로딩 중...
-          </div>
-        )}
-      </div>
+      <h1 className="text-3xl font-bold mb-6">기록지</h1>
 
-      {/* 보기 모드 선택 버튼 */}
       <ViewModeToggle viewMode={viewMode} onModeChange={setViewMode} />
 
-      {/* 날짜 네비게이션 섹션 (모든 토요일 날짜 선택 가능) */}
-      {days.length > 0 && (
-        <DateNavigation
-          days={days}
-          selectedDateId={selectedDateId}
-          onDateSelect={handleDateSelect}
-          isDateDropdownOpen={isDateDropdownOpen}
-          onToggleDropdown={() => setIsDateDropdownOpen((prev) => !prev)}
-          onCloseDropdown={() => setIsDateDropdownOpen(false)}
-          onPrevious={handlePreviousDate}
-          onNext={handleNextDate}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-          onAddDate={handleOpenAddDateModal}
-        />
-      )}
-
-      {/* 날짜 추가 모달 */}
-      <AddDateModal
-        isOpen={isAddDateModalOpen}
-        onClose={() => setIsAddDateModalOpen(false)}
-        onAddDate={handleAddDate}
-        existingDays={days}
+      <DateNavigation
+        days={days}
+        selectedDateId={selectedDateId}
+        onDateSelect={handleDateSelect}
+        isDateDropdownOpen={isDateDropdownOpen}
+        onToggleDropdown={() => setIsDateDropdownOpen((p) => !p)}
+        onCloseDropdown={() => setIsDateDropdownOpen(false)}
+        onPrevious={handlePreviousDate}
+        onNext={handleNextDate}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onAddDate={handleOpenAddDateModal}
       />
 
-      {/* 팀 추가 버튼 */}
+      <AddDateModal isOpen={isAddDateModalOpen} onClose={() => setIsAddDateModalOpen(false)} onAddDate={handleAddDate} existingDays={days} />
+
       {selectedDateId && viewMode === "records" && (
         <div className="mb-4 flex justify-end">
-          <button
-            onClick={() => setIsSetupModalOpen(true)}
-            disabled={!canAddTeam}
-            className={`px-4 py-2 rounded-lg font-medium transition-all ${canAddTeam ? "bg-green-500 text-white hover:bg-green-600 shadow-md" : "bg-gray-300 text-gray-500 cursor-not-allowed"}`}>
-            {canAddTeam ? "+ 팀 추가" : "팀 추가 완료 (최대 2팀)"}
+          <button onClick={() => setIsSetupModalOpen(true)} disabled={!canAddTeam} className="px-4 py-2 rounded bg-green-500 text-white disabled:bg-gray-300">
+            + 팀 추가
           </button>
         </div>
       )}
 
-      {/* 선택된 날짜의 경기 기록 테이블 */}
       {selectedDateId &&
         viewMode === "records" &&
-        currentTeams.map((team, index) => {
-          // selectedDateId에서 dateId 가져오기
-          const day = days.find(d => d.id === selectedDateId);
+        currentTeams.map((team, idx) => {
+          const day = days.find((d) => d.id === selectedDateId);
           const dateId = day?.dateId;
-          // teamId 가져오기
-          const teamIdValue = teamIdMap[selectedDateId]?.[team.teamName];
-          const teamId = typeof teamIdValue === "number" ? teamIdValue : typeof teamIdValue === "string" ? parseInt(teamIdValue, 10) : undefined;
+          const teamId = teamIdMap[selectedDateId]?.[team.teamName];
 
-          return (
-            <div key={index} className="mb-6">
-              <AttendanceTable
-                selectedDate={selectedDateId}
-                teamName={team.teamName}
-                customPlayers={team.players}
-                matches={currentMatches}
-                dateId={dateId}
-                teamId={teamId}
-              />
-            </div>
-          );
+          return <AttendanceTable key={idx} selectedDate={selectedDateId} teamName={team.teamName} customPlayers={team.players} matches={currentMatches} dateId={dateId} teamId={teamId} />;
         })}
 
-      {/* 팀이 없을 때 안내 메시지 */}
-      {selectedDateId && viewMode === "records" && currentTeams.length === 0 && <EmptyTeamMessage onAddTeam={() => setIsSetupModalOpen(true)} />}
-
-      {/* 경기 결과 화면 */}
-      {selectedDateId && viewMode === "result" && (
+      {selectedDateId && viewMode == "result" && (
         <MatchResultView
           selectedDateId={selectedDateId}
           teamNames={currentTeamNames}
@@ -302,13 +214,22 @@ export default function RecordsPage() {
           onAddMatch={handleAddMatch}
           onUpdateMatch={handleUpdateMatch}
           onDeleteMatch={handleDeleteMatch}
+          onSaveAll={async () => {
+            // 현재 날짜의 모든 경기가 이미 저장되어 있으므로 데이터 새로고침만 수행
+            if (loadRecordsByDate) {
+              await loadRecordsByDate(selectedDateId, days);
+            }
+          }}
+          onLoadMatches={async () => {
+            // 저장된 경기를 서버에서 불러오기
+            if (loadRecordsByDate && selectedDateId) {
+              await loadRecordsByDate(selectedDateId, days);
+            }
+          }}
+          isLoading={isLoading}
         />
       )}
 
-      {/* 드롭다운 외부 클릭 시 닫기 (오버레이) */}
-      {isDateDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setIsDateDropdownOpen(false)} />}
-
-      {/* 초기 설정 모달 */}
       {isSetupModalOpen && (
         <InitialSetup onComplete={handleInitialSetupComplete} onClose={() => setIsSetupModalOpen(false)} registeredPlayerNames={registeredPlayerNames} existingTeamNames={currentTeamNames} />
       )}

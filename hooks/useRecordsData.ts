@@ -25,23 +25,38 @@ export function useRecordsData(selectedDateId: string, days: Day[]) {
   // 로딩 상태
   const [isLoading, setIsLoading] = useState<boolean>(false);
   // 팀 ID 매핑 (API에서 받은 ID를 저장)
-  const [teamIdMap, setTeamIdMap] = useState<Record<string, Record<string, string | number>>>({});
+  const [teamIdMap, setTeamIdMap] = useState<Record<string, Record<string, number>>>({});
 
   // 날짜별 데이터 불러오기 (API)
   const loadRecordsByDate = useCallback(async (dateId: string, daysList: Day[]) => {
-    if (!dateId) return;
+    if (!dateId) {
+      // dateId가 없으면 데이터 초기화
+      setTeamsByDate((prev) => ({ ...prev, [dateId]: [] }));
+      setMatchesByDate((prev) => ({ ...prev, [dateId]: [] }));
+      return;
+    }
 
     setIsLoading(true);
     try {
-      console.log("[useRecordsData] Loading records for dateId:", dateId);
+      console.log("[useRecordsData] Loading records for dateId:", dateId, "daysList:", daysList);
 
       // dateId를 숫자로 변환 (days.dateId 사용)
       const day = daysList.find(d => d.id === dateId);
-      const numericDateId = day?.dateId ? day.dateId : parseInt(dateId, 10);
+      if (!day) {
+        console.error("[useRecordsData] Day not found for dateId:", dateId);
+        alert(`날짜 정보를 찾을 수 없습니다. (dateId: ${dateId})`);
+        return;
+      }
+
+      const numericDateId = day.dateId;
+      console.log("[useRecordsData] Found day:", day, "numericDateId:", numericDateId);
 
       // API 호출 시 숫자 dateId 사용
+      console.log("[useRecordsData] Calling API with dateId:", String(numericDateId));
       const response = await recordsService.getRecordsByDate(String(numericDateId));
       console.log("[useRecordsData] API Response:", response);
+      console.log("[useRecordsData] Response teams count:", response.teams?.length || 0);
+      console.log("[useRecordsData] Response matches count:", response.matches?.length || 0);
 
       // 팀 정보 변환 (TeamResponse -> TeamInfo)
       const teams: TeamInfo[] = response.teams.map((team) => ({
@@ -51,10 +66,10 @@ export function useRecordsData(selectedDateId: string, days: Day[]) {
 
       // 팀 ID 매핑 저장
       setTeamIdMap((prev) => {
-        const newDateMap: Record<string, string | number> = response.teams.reduce((acc, team) => {
+        const newDateMap: Record<string, number> = response.teams.reduce((acc, team) => {
           acc[team.teamName] = team.id;
           return acc;
-        }, {} as Record<string, string | number>);
+        }, {} as Record<string, number>);
 
         return {
           ...prev,
@@ -62,26 +77,49 @@ export function useRecordsData(selectedDateId: string, days: Day[]) {
         };
       });
 
-      // 경기 결과 변환 (MatchResponse -> MatchScore)
-      const matches: MatchScore[] = response.matches.map((match) => ({
-        id: match.id,
-        team1Name: match.team1Name,
-        team1Score: match.team1Score,
-        team1Result: match.team1Result,
-        team2Name: match.team2Name,
-        team2Score: match.team2Score,
-        team2Result: match.team2Result,
-      }));
+      // ✅ Swagger 기준: MatchResponse -> MatchScore 변환 (서버 응답 그대로 사용)
+      const matches: MatchScore[] = response.matches.map((match) => {
+        console.log("[useRecordsData] Mapping match:", {
+          id: match.id,
+          team1Name: match.team1Name,
+          team1Score: match.team1Score,
+          team1Result: match.team1Result,
+          team2Name: match.team2Name,
+          team2Score: match.team2Score,
+          team2Result: match.team2Result,
+        });
+
+        // ✅ 서버에서 받은 id를 그대로 사용 (string으로 변환하여 타입 일관성 유지)
+        return {
+          id: String(match.id), // 서버 ID를 string으로 변환
+          team1Name: match.team1Name,
+          team1Score: match.team1Score,
+          team1Result: match.team1Result,
+          team2Name: match.team2Name,
+          team2Score: match.team2Score,
+          team2Result: match.team2Result,
+        };
+      });
 
       setTeamsByDate((prev) => ({
         ...prev,
         [dateId]: teams,
       }));
 
-      setMatchesByDate((prev) => ({
-        ...prev,
-        [dateId]: matches,
-      }));
+      setMatchesByDate((prev) => {
+        const updated = {
+          ...prev,
+          [dateId]: matches,
+        };
+        console.log("[useRecordsData] Updated matchesByDate:", updated);
+        return updated;
+      });
+
+      console.log("[useRecordsData] Successfully loaded:", {
+        teamsCount: teams.length,
+        matchesCount: matches.length,
+        dateId,
+      });
     } catch (error) {
       // 에러 메시지 추출
       let errorMessage = "알 수 없는 오류가 발생했습니다.";
@@ -106,17 +144,22 @@ export function useRecordsData(selectedDateId: string, days: Day[]) {
         errorMessage,
         errorDetails,
         originalError: error,
+        dateId,
       });
 
-      // 에러 발생 시 빈 배열로 초기화 (팀이 없는 상태)
-      setTeamsByDate((prev) => ({
-        ...prev,
-        [dateId]: [],
-      }));
-      setMatchesByDate((prev) => ({
-        ...prev,
-        [dateId]: [],
-      }));
+      // ✅ 에러 발생 시 사용자에게 알림 표시
+      if (error instanceof ApiError) {
+        if (error.status === 404) {
+          // 404 에러는 데이터가 없는 것으로 간주 (에러 표시 안 함)
+          console.log("[useRecordsData] No records found for dateId:", dateId);
+          setTeamsByDate((prev) => ({ ...prev, [dateId]: [] }));
+          setMatchesByDate((prev) => ({ ...prev, [dateId]: [] }));
+        } else {
+          alert(`경기 데이터를 불러오는 중 오류가 발생했습니다.\n\n${errorMessage}`);
+        }
+      } else {
+        alert(`경기 데이터를 불러오는 중 오류가 발생했습니다.\n\n${errorMessage}`);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -138,5 +181,6 @@ export function useRecordsData(selectedDateId: string, days: Day[]) {
     setIsLoading,
     teamIdMap,
     setTeamIdMap,
+    loadRecordsByDate, // 데이터 새로고침을 위해 export
   };
 }

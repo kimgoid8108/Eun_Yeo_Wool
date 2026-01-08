@@ -12,9 +12,10 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Day } from "@/data/days";
+import * as recordsService from "@/services/recordsService";
 
 export function useDateManagement(initialDays: Day[]) {
-  // 날짜 목록 (동적으로 관리)
+  // 날짜 목록 (백엔드 API에서 불러온 데이터)
   const [days, setDays] = useState<Day[]>(initialDays);
   // 선택된 날짜 ID
   const [selectedDateId, setSelectedDateId] = useState<string>("");
@@ -22,6 +23,63 @@ export function useDateManagement(initialDays: Day[]) {
   const [isDateDropdownOpen, setIsDateDropdownOpen] = useState(false);
   // 날짜 추가 모달 열림/닫힘 상태
   const [isAddDateModalOpen, setIsAddDateModalOpen] = useState<boolean>(false);
+  // 로딩 상태
+  const [isLoadingDates, setIsLoadingDates] = useState(false);
+
+  // 백엔드에서 저장된 날짜 목록 불러오기
+  const loadDatesFromAPI = useCallback(async () => {
+    setIsLoadingDates(true);
+    try {
+      console.log("[useDateManagement] Loading dates from API...");
+      const matchRecords = await recordsService.getAllMatchRecords();
+      console.log("[useDateManagement] API response:", matchRecords);
+
+        // API 응답을 Day 형식으로 변환
+        const apiDays: Day[] = matchRecords
+          .map((record) => {
+            // ✅ 날짜 유효성 검사
+            const date = new Date(record.date);
+            if (isNaN(date.getTime())) {
+              console.warn("[useDateManagement] Invalid date in record:", record);
+              return null; // 유효하지 않은 날짜는 필터링
+            }
+
+            const dateId = record.dateId || date.getTime();
+            return {
+              id: String(dateId),
+              day: date.toLocaleDateString("ko-KR", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+                weekday: "short",
+              }),
+              dateId: dateId,
+            };
+          })
+          .filter((day): day is Day => day !== null); // null 제거
+
+      // API에서 불러온 날짜와 초기 날짜를 병합
+      const allDays = [...initialDays, ...apiDays];
+      const uniqueDays = allDays.filter(
+        (day, index, self) => index === self.findIndex((d) => d.dateId === day.dateId)
+      );
+      const sortedDays = uniqueDays.sort((a, b) => a.dateId - b.dateId);
+
+      console.log("[useDateManagement] Merged days:", sortedDays);
+      setDays(sortedDays);
+    } catch (error) {
+      console.error("[useDateManagement] Failed to load dates from API:", error);
+      // 에러 발생 시 초기 날짜만 사용
+      setDays(initialDays);
+    } finally {
+      setIsLoadingDates(false);
+    }
+  }, [initialDays]);
+
+  // 초기 마운트 시 날짜 목록 불러오기
+  useEffect(() => {
+    loadDatesFromAPI();
+  }, [loadDatesFromAPI]);
 
   // 초기화: 가장 최근 날짜를 기본값으로 설정
   useEffect(() => {
@@ -39,6 +97,7 @@ export function useDateManagement(initialDays: Day[]) {
       }
       // 날짜 순서대로 정렬하여 추가
       const updated = [...prev, newDay].sort((a, b) => a.dateId - b.dateId);
+      console.log("[useDateManagement] Date added:", newDay, "Updated days:", updated);
       return updated;
     });
     // 새로 추가된 날짜를 선택
@@ -84,10 +143,12 @@ export function useDateManagement(initialDays: Day[]) {
     isAddDateModalOpen,
     setIsAddDateModalOpen,
     currentDateIndex,
+    isLoadingDates,
     handleAddDate,
     handleOpenAddDateModal,
     handlePreviousDate,
     handleNextDate,
     handleDateSelect,
+    loadDatesFromAPI, // 날짜 목록 새로고침 함수 export
   };
 }

@@ -20,13 +20,36 @@
  */
 
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
-import { TeamRequest, TeamResponse, MatchRequest, MatchResponse, DateRecordsResponse, PlayerRecordRequest, PlayerRecordResponse } from "@/types/api";
+import { TeamRequest, TeamResponse, MatchCreateRequest, MatchUpdateRequest, MatchResponse, DateRecordsResponse, PlayerRecordRequest, PlayerRecordResponse, MatchRecordsResponse } from "@/types/api";
 
 /**
  * 특정 날짜의 경기 기록 조회
  */
 export async function getRecordsByDate(dateId: string): Promise<DateRecordsResponse> {
   return apiGet<DateRecordsResponse>(`/records/${dateId}`);
+}
+
+/**
+ * 모든 경기 기록 목록 조회
+ * 엔드포인트: GET /match-records
+ */
+export async function getAllMatchRecords(): Promise<MatchRecordsResponse[]> {
+  console.log("[recordsService] Fetching all match records:", {
+    endpoint: "/match-records",
+  });
+
+  try {
+    const response = await apiGet<MatchRecordsResponse[]>("/match-records");
+    console.log("[recordsService] All match records fetched successfully:", response);
+    return response;
+  } catch (error) {
+    console.error("[recordsService] Failed to fetch all match records:", {
+      endpoint: "/match-records",
+      error,
+    });
+    // 에러 발생 시 빈 배열 반환
+    return [];
+  }
 }
 
 /**
@@ -131,14 +154,14 @@ export async function deleteTeam(teamId: string): Promise<void> {
 /**
  * 경기 결과 추가
  */
-export async function createMatch(data: MatchRequest): Promise<MatchResponse> {
+export async function createMatch(data: MatchCreateRequest): Promise<MatchResponse> {
   return apiPost<MatchResponse>("/matches", data);
 }
 
 /**
  * 경기 결과 수정
  */
-export async function updateMatch(matchId: string, data: Partial<MatchRequest>): Promise<MatchResponse> {
+export async function updateMatch(matchId: string, data: Partial<MatchUpdateRequest>): Promise<MatchResponse> {
   return apiPut<MatchResponse>(`/matches/${matchId}`, data);
 }
 

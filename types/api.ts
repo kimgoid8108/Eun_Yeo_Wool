@@ -2,10 +2,10 @@
  * API 요청/응답 타입 정의
  */
 
-import { TeamInfo, MatchScore } from "./records";
+import { TeamInfo } from "./records";
 
 /**
- * API 응답 래퍼 타입
+ * API 응답 래퍼
  */
 export interface ApiResponse<T> {
   data: T;
@@ -13,11 +13,10 @@ export interface ApiResponse<T> {
   success?: boolean;
 }
 
-/**
- * 경기 기록 관련 API 타입
- */
+/* ============================
+   팀 관련
+============================ */
 
-// 팀 정보 요청/응답
 export interface TeamRequest {
   dateId: string;
   teamName: string;
@@ -25,64 +24,83 @@ export interface TeamRequest {
 }
 
 export interface TeamResponse extends TeamInfo {
-  id: string;
+  id: number; // ✅ number로 고정
   dateId: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
-// 경기 결과 요청/응답
-export interface MatchRequest {
-  dateId: string;
-  team1Name: string;
+/* ============================
+   경기 관련
+============================ */
+
+/** 경기 생성 요청 */
+export interface MatchCreateRequest {
+  matchDate: string;
+  matchOrder: number;
+  teamId: number;
   team1Score: number;
-  team2Name: string;
   team2Score: number;
 }
 
-export interface MatchResponse extends MatchScore {
+/** 경기 수정 요청 */
+export interface MatchUpdateRequest {
+  matchDate: string;
+  matchOrder: number;
+  teamId: number;
+  team1Score: number;
+  team2Score: number;
+}
+
+/** 경기 응답 */
+export interface MatchResponse {
+  id: string; // Swagger 기준: string 또는 number일 수 있음 (실제 응답 확인 필요)
   dateId: string;
+
+  team1Id: number;
+  team1Name: string;
+  team1Score: number;
+  team1Result: "WIN" | "LOSE" | "DRAW";
+
+  team2Id: number;
+  team2Name: string;
+  team2Score: number;
+  team2Result: "WIN" | "LOSE" | "DRAW";
+
   createdAt?: string;
   updatedAt?: string;
 }
 
-// 날짜별 데이터 조회 응답
+/** 날짜별 기록 */
 export interface DateRecordsResponse {
   teams: TeamResponse[];
   matches: MatchResponse[];
 }
 
-/**
- * 회원(선수) 관련 API 타입
- */
+/** 모든 경기 기록 목록 응답 */
+export interface MatchRecordsResponse {
+  dateId: number;
+  date: string; // ISO 8601 형식
+  teams?: TeamResponse[];
+  matches?: MatchResponse[];
+}
+
+/* ============================
+   선수 관련
+============================ */
+
 export interface PlayerResponse {
   id: number;
   name: string;
   createdAt: string;
 }
 
-/**
- * Player 타입 (PlayerResponse의 별칭)
- * 서비스 레이어에서 사용
- */
 export type Player = PlayerResponse;
 
-/**
- * 선수 경기 기록 요청 타입 (백엔드 CreatePlayerRecordDto와 1:1 대응)
- *
- * 출석 상태는 boolean 하나로만 관리:
- * - true: 참석 (체크됨)
- * - false: 불참 (체크 안됨)
- *
- * 제거된 필드:
- * - yellowCard (더 이상 사용하지 않음)
- * - redCard (더 이상 사용하지 않음)
- * - isMOM (더 이상 사용하지 않음)
- * - matchId (더 이상 사용하지 않음)
- * - cleanSheet (더 이상 사용하지 않음)
- * - goal (더 이상 사용하지 않음)
- * - assist (더 이상 사용하지 않음)
- */
+/* ============================
+   선수 경기 기록
+============================ */
+
 export interface PlayerRecordRequest {
   playerId: number;
   teamId: number;
@@ -90,22 +108,6 @@ export interface PlayerRecordRequest {
   attendance: boolean;
 }
 
-/**
- * 선수 경기 기록 응답 타입
- *
- * 출석 상태는 boolean 하나로만 관리:
- * - true: 참석 (체크됨)
- * - false: 불참 (체크 안됨)
- *
- * 제거된 필드:
- * - yellowCard (더 이상 사용하지 않음)
- * - redCard (더 이상 사용하지 않음)
- * - isMOM (더 이상 사용하지 않음)
- * - matchId (더 이상 사용하지 않음)
- * - cleanSheet (더 이상 사용하지 않음)
- * - goal (더 이상 사용하지 않음)
- * - assist (더 이상 사용하지 않음)
- */
 export interface PlayerRecordResponse {
   playerId: number;
   teamId: number;

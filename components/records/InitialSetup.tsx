@@ -204,11 +204,7 @@ export default function InitialSetup({ onComplete, onClose, registeredPlayerName
       e.preventDefault();
       const trimmedTeamName = teamName.trim();
 
-      // 팀 이름 중복 체크
-      if (existingTeamNames.includes(trimmedTeamName)) {
-        alert("중복된 팀 이름입니다. 다른 팀 이름을 입력해주세요.");
-        return;
-      }
+      // ✅ 팀 이름 중복 체크 제거 - 서버에서 처리하거나 중복 허용
 
       // 이름이 입력된 선수만 필터링
       const validPlayers = players.filter((p) => p.name.trim() !== "");
@@ -218,7 +214,7 @@ export default function InitialSetup({ onComplete, onClose, registeredPlayerName
       }
       onComplete(trimmedTeamName, validPlayers);
     },
-    [teamName, players, onComplete, existingTeamNames]
+    [teamName, players, onComplete]
   );
 
   return (
