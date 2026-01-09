@@ -1,7 +1,28 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Day } from "@/data/days";
+import React, { useState, useCallback } from "react";
+import { apiPost } from "@/lib/api";
+
+// 데이터 타입 정의
+export interface PlayerRecord {
+  id: string;
+  name: string;
+  attendance: boolean;
+  goals: number;
+  assists: number;
+  isWin: boolean;
+  isDraw: boolean;
+  isMom: boolean;
+  totalScore: number;
+}
+
+export interface Day {
+  id: string;
+  day: string;
+  dateId: number;
+  players: PlayerRecord[];
+  // eventDate?: string; // 서버 응답에 따라 있을 수 있음
+}
 
 interface AddDateModalProps {
   isOpen: boolean;
@@ -10,119 +31,114 @@ interface AddDateModalProps {
   existingDays: Day[];
 }
 
-/**
- * 날짜 추가 모달 컴포넌트
- *
- * 경기 날짜를 추가하는 모달 컴포넌트입니다.
- * - 날짜 선택기로 날짜 선택
- * - 토요일인지 검증
- * - 중복 날짜 체크
- *
- * 사용처:
- * - app/records/page.tsx: 기록지 페이지에서 날짜 추가 모달로 사용
- */
 export default function AddDateModal({ isOpen, onClose, onAddDate, existingDays }: AddDateModalProps) {
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
-  // 날짜 선택 핸들러
-  const handleDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const dateString = e.target.value;
-    setSelectedDate(dateString);
-    setError("");
-  }, []);
+  // 자동 점수 계산 (미사용)
+  const calculateScore = (p: Partial<PlayerRecord>) => {
+    let score = 0;
+    if (p.isWin) score += 3;
+    if (p.isDraw) score += 1;
+    score += (p.goals || 0) * 2;
+    score += (p.assists || 0) * 1;
+    if (p.isMom) score += 5;
+    return score;
+  };
 
-  // 날짜 추가 핸들러
-  const handleAdd = useCallback(() => {
+  // handleAdd 함수 리라이트 (중복 체크 로직 등 지시사항 반영)
+  const handleAdd = useCallback(async () => {
     if (!selectedDate) {
       setError("날짜를 선택해주세요.");
       return;
     }
 
-    const date = new Date(selectedDate);
-    date.setHours(0, 0, 0, 0);
+    const dateObj = new Date(selectedDate);
+    dateObj.setHours(0, 0, 0, 0);
 
-    // 토요일인지 확인 (토요일 = 6)
-    const dayOfWeek = date.getDay();
-    if (dayOfWeek !== 6) {
+    // 토요일만 허용
+    if (dateObj.getDay() !== 6) {
       setError("토요일만 선택할 수 있습니다.");
       return;
     }
 
-    // 2026년 이후인지 확인
-    if (date.getFullYear() < 2026) {
-      setError("2026년 이후의 날짜만 선택할 수 있습니다.");
+    const dateId = dateObj.getTime();
+    const isoDate = dateObj.toISOString();
+
+    // [중복 체크 로직] dateId 또는 eventDate(ISO) 기준으로 기존 데이터 찾기
+    const existingDay = existingDays.find((d) => String(d.dateId) === String(dateId) || (d as any).eventDate === isoDate);
+
+    if (existingDay) {
+      onAddDate(existingDay); // 부모에 "이미 있는 데이터 선택" 효과 전달
+      onClose();
       return;
     }
 
-    // 중복 날짜 체크
-    const dateId = date.getTime();
-    const isDuplicate = existingDays.some((day) => day.dateId === dateId);
-    if (isDuplicate) {
-      setError("이미 추가된 날짜입니다.");
-      return;
+    setIsSaving(true);
+
+    try {
+      // 서버에 POST 요청 (필수: eventDate)
+      const response = await apiPost("/match-dates", {
+        eventDate: isoDate, // 서버 필드명
+        // 필요시 다른 필드도 같이 전송
+      });
+
+      // response 타입이 unknown일 수 있으니 명시적으로 타입 가드 후 전달
+      if (response && typeof response === "object") {
+        // 만약 data 필드가 있으면 data를, 없으면 response 자체를 전달
+        const newDay = (response as any).data ?? response;
+        onAddDate(newDay); // 성공 후 신규 날짜 객체 전달
+      } else {
+        // 예외 상황: 객체가 아닌 응답
+        setError("서버 응답이 올바르지 않습니다.");
+      }
+      onClose();
+    } catch (err: any) {
+      if (typeof err.message === "string" && err.message.includes("이미 등록된")) {
+        setError("이미 등록된 날짜입니다. 목록에서 선택해 주세요.");
+      } else {
+        setError(err.message || "날짜 저장 실패");
+      }
+    } finally {
+      setIsSaving(false);
     }
-
-    // 날짜 포맷팅
-    const formattedDate = date.toLocaleDateString("ko-KR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      weekday: "short",
-    });
-
-    const newDay: Day = {
-      id: String(dateId),
-      day: formattedDate,
-      dateId: dateId,
-    };
-
-    onAddDate(newDay);
-    setSelectedDate("");
-    setError("");
-    onClose();
   }, [selectedDate, existingDays, onAddDate, onClose]);
-
-  // 모달 닫기 핸들러
-  const handleClose = useCallback(() => {
-    setSelectedDate("");
-    setError("");
-    onClose();
-  }, [onClose]);
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">경기 날짜 추가</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md">
+        <h2 className="text-xl font-bold mb-6 text-gray-900">📅 새 경기 날짜 등록</h2>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-600 mb-1">날짜 선택</label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => {
+                setSelectedDate(e.target.value);
+                setError("");
+              }}
+              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
 
-        <div className="mb-4">
-          <label htmlFor="date-input" className="block text-sm font-medium text-gray-700 mb-2">
-            날짜 선택 (토요일만 가능)
-          </label>
-          <input
-            id="date-input"
-            type="date"
-            value={selectedDate}
-            onChange={handleDateChange}
-            min="2026-01-01"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-        </div>
+          {error && <p className="text-red-500 text-sm font-medium">⚠️ {error}</p>}
 
-        <div className="flex gap-3 justify-end">
-          <button
-            onClick={handleClose}
-            className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors">
-            취소
-          </button>
-          <button
-            onClick={handleAdd}
-            className="px-4 py-2 text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors">
-            추가
-          </button>
+          <div className="flex gap-3 pt-4">
+            <button type="button" onClick={onClose} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all">
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={handleAdd}
+              disabled={isSaving}
+              className={`flex-1 py-3 text-white rounded-lg font-bold transition-all ${isSaving ? "bg-blue-300" : "bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200"}`}>
+              {isSaving ? "저장 중..." : "등록하기"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

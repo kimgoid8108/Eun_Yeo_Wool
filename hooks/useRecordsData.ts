@@ -41,7 +41,7 @@ export function useRecordsData(selectedDateId: string, days: Day[]) {
       console.log("[useRecordsData] Loading records for dateId:", dateId, "daysList:", daysList);
 
       // dateId를 숫자로 변환 (days.dateId 사용)
-      const day = daysList.find(d => d.id === dateId);
+      const day = daysList.find((d) => d.id === dateId);
       if (!day) {
         console.error("[useRecordsData] Day not found for dateId:", dateId);
         alert(`날짜 정보를 찾을 수 없습니다. (dateId: ${dateId})`);
@@ -58,19 +58,24 @@ export function useRecordsData(selectedDateId: string, days: Day[]) {
       console.log("[useRecordsData] Response teams count:", response.teams?.length || 0);
       console.log("[useRecordsData] Response matches count:", response.matches?.length || 0);
 
-      // 팀 정보 변환 (TeamResponse -> TeamInfo)
-      const teams: TeamInfo[] = response.teams.map((team) => ({
-        teamName: team.teamName,
-        players: team.players,
-      }));
+      // ✅ 1. 팀 정보 변환 부분 수정:
+      //    teamName이 '핑크팀_2026-01-03_1767861232811'과 같이 오면,
+      //    UI에는 '핑크팀'만 표시되도록 처리(아니면 _가 없으면 그대로 사용)
+      const teams: TeamInfo[] = response.teams.map((team: any) => {
+        const displayName = team.teamName && team.teamName.includes("_") ? team.teamName.split("_")[0] : team.teamName;
+        return {
+          teamName: displayName,
+          players: team.players,
+        };
+      });
 
-      // 팀 ID 매핑 저장
+      // ✅ 2. 팀 ID 매핑 저장 부분 (displayName 기준으로 작성)
       setTeamIdMap((prev) => {
-        const newDateMap: Record<string, number> = response.teams.reduce((acc, team) => {
-          acc[team.teamName] = team.id;
+        const newDateMap: Record<string, number> = response.teams.reduce((acc: any, team: any) => {
+          const displayName = team.teamName && team.teamName.includes("_") ? team.teamName.split("_")[0] : team.teamName;
+          acc[displayName] = team.id;
           return acc;
         }, {} as Record<string, number>);
-
         return {
           ...prev,
           [dateId]: newDateMap,
@@ -88,10 +93,9 @@ export function useRecordsData(selectedDateId: string, days: Day[]) {
           team2Score: match.team2Score,
           team2Result: match.team2Result,
         });
-
-        // ✅ 서버에서 받은 id를 그대로 사용 (string으로 변환하여 타입 일관성 유지)
+        // 서버에서 받은 id를 string으로 변환
         return {
-          id: String(match.id), // 서버 ID를 string으로 변환
+          id: String(match.id),
           team1Name: match.team1Name,
           team1Score: match.team1Score,
           team1Result: match.team1Result,
@@ -101,9 +105,10 @@ export function useRecordsData(selectedDateId: string, days: Day[]) {
         };
       });
 
+      // ✅ 3. 팀 정보는 이 날짜의 teams만으로 완전히 덮어쓴다
       setTeamsByDate((prev) => ({
         ...prev,
-        [dateId]: teams,
+        [dateId]: teams, // 해당 날짜에 서버에서 받아온 팀만 반영
       }));
 
       setMatchesByDate((prev) => {

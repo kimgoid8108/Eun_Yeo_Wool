@@ -71,7 +71,7 @@ export function usePlayerStatsSave(
 
       if (typeof numericDateId === "number") {
         try {
-          const savedRecords: PlayerRecordResponse[] = await getPlayerRecords(numericDateId);
+          const savedRecords: PlayerRecordResponse[] = await getPlayerRecords(numericDateId.toString());
           const playerRecordMap = createPlayerRecordMap(savedRecords);
 
           // 프론트 전용 출석 상태 업데이트 (DB에서 불러온 참석자 + 프론트 상태의 불참자 모두 유지)
