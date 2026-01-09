@@ -26,8 +26,8 @@ import * as recordsService from "@/services/recordsService";
 export function useDateManagement(initialDays: Day[]) {
   // 날짜 목록 (백엔드 API에서 불러온 데이터 포함)
   const [days, setDays] = useState<Day[]>(initialDays);
-  // 선택된 날짜 ID (number string)
-  const [selectedDateId, setSelectedDateId] = useState<string>("");
+  // 선택된 날짜 ID (string)
+  const [selectedDateId, setSelectedDateId] = useState<string>(""); // <-- 에러 해결: 선언 추가
   // 날짜 드롭다운 열림/닫힘 상태
   const [isDateDropdownOpen, setIsDateDropdownOpen] = useState(false);
   // 날짜 추가 모달 열림/닫힘 상태
