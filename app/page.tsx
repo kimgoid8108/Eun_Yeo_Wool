@@ -1,85 +1,78 @@
-/**
- * 대시보드 메인 페이지
- *
- * 애플리케이션의 메인 대시보드 페이지입니다.
- * 오늘 경기, 출석 인원, 회비 잔액, 월별 통계 등을 표시합니다.
- *
- * 사용하는 컴포넌트:
- * - OverviewCard: 통계 정보 카드 표시
- * - RecentMatchCard: 최근 경기 결과 표시
- * - MiniChart: 월별 출석 통계 그래프 표시
- *
- * 사용하는 유틸리티:
- * - calcBalance: 회비 잔액 계산
- */
-import { matches } from '@/data/matches';
-import { records } from '@/data/records';
-import { calcBalance } from '@/utils/calcBalance';
-import OverviewCard from '@/components/dashboard/OverviewCard';
-import RecentMatchCard from '@/components/dashboard/RecentMatchCard';
-import MiniChart from '@/components/dashboard/MiniChart';
+"use client";
+
+import { useEffect, useState } from "react";
+// 로컬 데이터 import는 제거하거나 기본값으로만 사용합니다.
+import OverviewCard from "@/components/dashboard/OverviewCard";
+import RecentMatchCard from "@/components/dashboard/RecentMatchCard";
+import MiniChart from "@/components/dashboard/MiniChart";
+import FeeSummaryCard from "@/components/fees/FeeSummaryCard";
 
 export default function Home() {
-  // 오늘 날짜 계산
-  const today = new Date().toISOString().split('T')[0];
-  const todayMatch = matches.find((match) => match.date === today);
+  // 1. 모든 실시간 데이터를 위한 상태 선언
+  const [serverBalance, setServerBalance] = useState<number | null>(null);
+  const [matchCount, setMatchCount] = useState<number>(0);
+  const [attendanceCount, setAttendanceCount] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // 출석 인원 계산 (최근 경기 기준)
-  const recentMatchId = matches[matches.length - 1]?.id;
-  const attendanceCount = recentMatchId
-    ? records.filter((r) => r.matchId === recentMatchId && r.attendance).length
-    : 0;
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      setIsLoading(true);
+      try {
+        // 2. 여러 API를 동시에 호출 (회비, 경기 기록 등)
+        const [feeRes, matchRes, recordRes] = await Promise.all([
+          fetch("https://jochukback.onrender.com/membershipfees"),
+          fetch("https://jochukback.onrender.com/matches"), // 경기 목록 API가 있다고 가정
+          fetch("https://jochukback.onrender.com/match-records"), // 출석 기록 API가 있다고 가정
+        ]);
 
-  // 현재 회비 잔액
-  const balance = calcBalance();
+        // 회비 계산
+        if (feeRes.ok) {
+          const fees = await feeRes.json();
+          const total = fees.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0);
+          setServerBalance(total);
+        }
 
-  // 최근 5개월 통계 데이터 (더미)
-  const monthlyStats = [12, 15, 18, 14, 16];
-  const monthlyLabels = ['1월', '2월', '3월', '4월', '5월'];
+        // 전체 경기 수 계산
+        if (matchRes.ok) {
+          const matches = await matchRes.json();
+          setMatchCount(matches.length);
+        }
+
+        // 최근 경기 출석 인원 계산
+        if (recordRes.ok) {
+          const records = await recordRes.json();
+          // 가장 최근 경기 ID를 찾거나 필터링 로직 추가 (지금은 전체 출석 기준)
+          const attCount = records.filter((r: any) => r.attendance === true).length;
+          setAttendanceCount(attCount);
+        }
+      } catch (err) {
+        console.error("데이터 로드 실패:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
 
   return (
     <div className="p-6">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">대시보드</h1>
 
-      {/* 오늘 경기 요약 */}
-      {todayMatch && (
-        <div className="mb-6">
-          <OverviewCard
-            title="오늘 경기"
-            value={todayMatch.score}
-            subtitle={`${new Date(todayMatch.date).toLocaleDateString('ko-KR')}`}
-            icon={<span className="text-3xl">⚽</span>}
-          />
-        </div>
-      )}
-
-      {/* 주요 통계 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-        <OverviewCard
-          title="출석 인원"
-          value={`${attendanceCount}명`}
-          subtitle="최근 경기 기준"
-          icon={<span className="text-3xl">👥</span>}
-        />
-        <OverviewCard
-          title="현재 회비 잔액"
-          value={`${balance.toLocaleString()}원`}
-          icon={<span className="text-3xl">💰</span>}
-        />
-        <OverviewCard
-          title="전체 경기 수"
-          value={`${matches.length}경기`}
-          icon={<span className="text-3xl">📊</span>}
-        />
+        {/* 실시간 출석 인원 */}
+        <OverviewCard title="출석 인원" value={isLoading ? "..." : `${attendanceCount}명`} subtitle="전체 출석 데이터 기준" icon={<span className="text-3xl">👥</span>} />
+
+        {/* 실시간 회비 잔액 */}
+        {/* 현재 회비 잔액: 전체 입금 - 전체 지출 (정확한 합계 카드로 대체) */}
+        <FeeSummaryCard />
+
+        {/* 실시간 전체 경기 수 */}
+        <OverviewCard title="전체 경기 수" value={isLoading ? "..." : `${matchCount}경기`} icon={<span className="text-3xl">📊</span>} />
       </div>
 
-      {/* 그래프와 최근 경기 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <MiniChart
-          title="월별 출석 통계"
-          data={monthlyStats}
-          labels={monthlyLabels}
-        />
+        <MiniChart title="월별 출석 통계" data={[0, 0, 0, 0, 0]} labels={["1월", "2월", "3월", "4월", "5월"]} />
         <RecentMatchCard />
       </div>
     </div>
