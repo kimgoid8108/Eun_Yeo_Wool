@@ -5,8 +5,8 @@ import { Day } from "@/data/days";
 
 interface DateNavigationProps {
   days: Day[];
-  selectedDateId: string;
-  onDateSelect: (dayId: string) => void;
+  selectedDateId: number; // 변경: string → number (Day의 id가 number)
+  onDateSelect: (dayId: number) => void; // 변경: string → number
   isDateDropdownOpen: boolean;
   onToggleDropdown: () => void;
   onCloseDropdown: () => void;
@@ -43,13 +43,14 @@ export default function DateNavigation({
   onTouchEnd,
   onAddDate,
 }: DateNavigationProps) {
+  // id 비교 타입 통일 (number)
   const selectedDay = useMemo(() => days.find((d) => d.id === selectedDateId), [days, selectedDateId]);
   const currentDateIndex = useMemo(() => days.findIndex((d) => d.id === selectedDateId), [days, selectedDateId]);
   const canGoPrevious = useMemo(() => currentDateIndex > 0, [currentDateIndex]);
   const canGoNext = useMemo(() => currentDateIndex < days.length - 1, [currentDateIndex]);
 
   const handleDateSelect = useCallback(
-    (dayId: string) => {
+    (dayId: number) => {
       onDateSelect(dayId);
       onCloseDropdown();
     },
@@ -73,7 +74,8 @@ export default function DateNavigation({
         {/* 날짜 표시 및 드롭다운 */}
         <div className="flex-1 mx-4 text-center relative">
           <button onClick={onToggleDropdown} className="w-full py-2 px-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors border border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-800">{selectedDay ? selectedDay.day : "날짜를 선택하세요"}</h2>
+            {/* Day 타입에 day 필드 없음 → date 속성으로 표시 */}
+            <h2 className="text-xl font-semibold text-gray-800">{selectedDay ? selectedDay.date : "날짜를 선택하세요"}</h2>
             <p className="text-sm text-gray-500 mt-1">{days.length > 0 && `${currentDateIndex + 1} / ${days.length}`}</p>
           </button>
 
@@ -82,11 +84,11 @@ export default function DateNavigation({
             <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
               {days.map((day) => (
                 <button
-                  // eventDate는 undefined. 안정성을 위해 id 또는 dateId만 사용.
-                  key={day.id || day.dateId}
+                  key={day.id}
                   onClick={() => handleDateSelect(day.id)}
                   className={`w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors ${selectedDateId === day.id ? "bg-blue-50 text-blue-600 font-bold" : "text-gray-700"}`}>
-                  {day.day}
+                  {/* Day 타입에 day 필드 없음 → date 속성 사용 */}
+                  {day.date}
                 </button>
               ))}
               {/* 날짜 추가 버튼 */}

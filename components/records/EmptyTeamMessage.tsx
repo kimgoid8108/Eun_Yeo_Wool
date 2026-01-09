@@ -32,36 +32,53 @@ export default function EnhancedTeamView({
     return teamsByDate[selectedDateId] || [];
   }, [teamsByDate, selectedDateId]);
 
+  // 날짜 id는 number로 연동 (DateNavigation props와 타입 맞춤)
+  const dateOptions = useMemo(() => {
+    return days.map((d: any) => ({
+      id: d.dateId,
+      date: new Date(d.date).toLocaleDateString("ko-KR", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        weekday: "short",
+      }),
+      location: d.location ?? "",
+      players: d.players || [],
+    }));
+  }, [days]);
+
+  // 현재 선택된 날짜의 number id 반환
+  const selectedDateNumberId = days.find((d) => String(d.dateId) === selectedDateId)?.dateId ?? dateOptions[0]?.id;
+
+  // DateNavigation의 onDateSelect 시 string -> number -> string 변환
+  const handleDateSelect = useCallback(
+    (dayIdNum: number) => {
+      onDateSelect(String(dayIdNum));
+    },
+    [onDateSelect]
+  );
+
   // 2. 날짜 이동 로직 (이전/다음 버튼 활성화)
-  const currentIndex = useMemo(() => days.findIndex((d) => String(d.dateId) === selectedDateId), [days, selectedDateId]);
+  const currentIndex = useMemo(() => dateOptions.findIndex((d) => d.id === selectedDateNumberId), [dateOptions, selectedDateNumberId]);
 
   const handlePrevious = useCallback(() => {
-    if (currentIndex > 0) onDateSelect(String(days[currentIndex - 1].dateId));
-  }, [currentIndex, days, onDateSelect]);
+    if (currentIndex > 0) onDateSelect(String(dateOptions[currentIndex - 1].id));
+  }, [currentIndex, dateOptions, onDateSelect]);
 
   const handleNext = useCallback(() => {
-    if (currentIndex < days.length - 1) onDateSelect(String(days[currentIndex + 1].dateId));
-  }, [currentIndex, days, onDateSelect]);
+    if (currentIndex < dateOptions.length - 1) onDateSelect(String(dateOptions[currentIndex + 1].id));
+  }, [currentIndex, dateOptions, onDateSelect]);
 
   return (
     <div className="w-full">
-      {/* 날짜 네비게이션: 타입 에러 해결 부분 */}
+      {/* 날짜 네비게이션: 타입 에러 해결 + Day 타입 맞춤 */}
       <DateNavigation
-        selectedDateId={selectedDateId}
-        days={days.map((d) => ({
-          id: String(d.dateId), // string으로 형변환
-          day: new Date(d.date).toLocaleDateString("ko-KR", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-            weekday: "short",
-          }),
-          dateId: d.dateId, // 원본 number 유지
-        }))}
+        selectedDateId={selectedDateNumberId}
+        days={dateOptions}
         isDateDropdownOpen={isDateDropdownOpen}
         onToggleDropdown={onToggleDropdown}
         onCloseDropdown={onCloseDropdown}
-        onDateSelect={onDateSelect}
+        onDateSelect={handleDateSelect}
         onPrevious={handlePrevious}
         onNext={handleNext}
         onTouchStart={() => {}}

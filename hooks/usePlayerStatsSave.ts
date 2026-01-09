@@ -7,7 +7,7 @@
  * @param {Record<number, AttendanceState>} attendanceMap - 출석 상태 맵
  * @param {number | undefined} dateId - 날짜 ID
  * @param {number | undefined} teamId - 팀 ID
- * @param {string} selectedDate - 선택된 날짜 ID
+ * @param {string} selectedDate - 선택된 날짜 ID (days의 id는 number임)
  * @param {function} setPlayerStats - 선수 통계 업데이트 함수
  * @param {function} setAttendanceMap - 출석 상태 업데이트 함수
  * @returns {object} 저장 관련 상태 및 함수들
@@ -67,7 +67,10 @@ export function usePlayerStatsSave(
       alert(`참석자 ${playersToSave.length}명의 데이터가 저장되었습니다!`);
 
       // DB 저장 후 최신 데이터 다시 불러오기 (참석자만 DB에 있음)
-      const numericDateId = typeof dateId === "number" ? dateId : days.find((d) => d.id === selectedDate)?.dateId;
+      // days[].id: number, selectedDate: string
+      // -> id를 string으로 변환 후 비교
+      const foundDay = days.find((d) => String(d.id) === String(selectedDate));
+      const numericDateId = typeof dateId === "number" ? dateId : foundDay?.id;
 
       if (typeof numericDateId === "number") {
         try {

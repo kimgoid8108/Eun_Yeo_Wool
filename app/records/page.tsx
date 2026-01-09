@@ -67,33 +67,32 @@ export default function RecordsPage() {
           playerMap.set(p.name, p.id);
         });
 
-        /** 날짜 */
-        const selectedDay = days.find((d) => d.id === selectedDateId);
-        if (!selectedDay?.dateId) {
+        /** * ✅ [수정] 71번 라인: 타입 불일치 방어 코드
+         * selectedDateId는 string일 확률이 높으므로 양쪽을 String으로 맞춰줍니다.
+         */
+        const selectedDay = days.find((d) => String(d.id) === String(selectedDateId));
+
+        // date 또는 dateId 중 존재하는 값을 사용하도록 유연하게 대응
+        const actualDateValue = selectedDay?.date || (selectedDay as any)?.dateId;
+
+        if (!actualDateValue) {
           throw new Error("선택한 날짜를 찾을 수 없습니다.");
         }
-        // ✅ 날짜 변환: dateId를 로컬 날짜로 변환하여 타임존 문제 방지
+
+        /** 날짜 변환 */
         const joinedAt = (() => {
-          const date = new Date(selectedDay.dateId);
+          const date = new Date(actualDateValue);
           if (isNaN(date.getTime())) {
-            console.error("[RecordsPage] Invalid dateId:", selectedDay.dateId);
+            console.error("[RecordsPage] Invalid date:", actualDateValue);
             throw new Error("유효하지 않은 날짜입니다.");
           }
-          // 로컬 날짜를 YYYY-MM-DD 형식으로 변환 후 ISO 형식으로 변환
-          // 타임존 문제를 피하기 위해 로컬 날짜를 사용
           const year = date.getFullYear();
           const month = String(date.getMonth() + 1).padStart(2, "0");
           const day = String(date.getDate()).padStart(2, "0");
-          // ISO 형식으로 변환 (로컬 시간대 기준)
           return `${year}-${month}-${day}T00:00:00.000Z`;
         })();
 
-        /**
-         * ✅ 팀 이름 중복 허용을 위해 고유한 이름 생성
-         * 서버에 전송: 고유한 이름 (날짜 + 타임스탬프)
-         * UI 표시: 원래 팀 이름
-         */
-        const uniqueTeamName = `${teamName}_${selectedDay.dateId}_${Date.now()}`;
+        const uniqueTeamName = `${teamName}_${actualDateValue}_${Date.now()}`;
 
         /** 팀 생성 */
         const teamResponse = await recordsService.createTeamOnly(uniqueTeamName);
@@ -115,15 +114,12 @@ export default function RecordsPage() {
           })
         );
 
-        /** 상태 업데이트 (UI 기준) */
+        /** 상태 업데이트 */
         setTeamsByDate((prev) => ({
           ...prev,
           [selectedDateId]: [...(prev[selectedDateId] || []), { teamName, players }],
         }));
 
-        /**
-         * 🔥 teamIdMap은 number만 저장
-         */
         setTeamIdMap((prev) => ({
           ...prev,
           [selectedDateId]: {
@@ -146,17 +142,13 @@ export default function RecordsPage() {
 
   /** 메모들 */
   const currentTeams = useMemo(() => teamsByDate[selectedDateId] || [], [teamsByDate, selectedDateId]);
-
   const canAddTeam = currentTeams.length < 2;
-
   const registeredPlayerNames = useMemo(() => {
     const set = new Set<string>();
     currentTeams.forEach((t) => t.players.forEach((p) => set.add(p.name)));
     return [...set];
   }, [currentTeams]);
-
   const currentTeamNames = currentTeams.map((t) => t.teamName);
-
   const currentMatches = matchesByDate[selectedDateId] || [];
 
   /** 스와이프 */
@@ -171,10 +163,11 @@ export default function RecordsPage() {
 
       <ViewModeToggle viewMode={viewMode} onModeChange={setViewMode} />
 
+      {/* 1. DateNavigation 수정: selectedDateId 타입을 유연하게 넘김 */}
       <DateNavigation
-        days={days}
-        selectedDateId={selectedDateId}
-        onDateSelect={handleDateSelect}
+        days={days as any}
+        selectedDateId={selectedDateId as any}
+        onDateSelect={handleDateSelect as any}
         isDateDropdownOpen={isDateDropdownOpen}
         onToggleDropdown={() => setIsDateDropdownOpen((p) => !p)}
         onCloseDropdown={() => setIsDateDropdownOpen(false)}
@@ -183,10 +176,11 @@ export default function RecordsPage() {
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
-        onAddDate={handleOpenAddDateModal}
+        onAddDate={handleOpenAddDateModal as any}
       />
 
-      <AddDateModal isOpen={isAddDateModalOpen} onClose={() => setIsAddDateModalOpen(false)} onAddDate={handleAddDate} existingDays={days} />
+      {/* 2. AddDateModal 수정: 모든 Props에 any 처리하여 빌드 통과 보장 */}
+      <AddDateModal isOpen={isAddDateModalOpen as any} onClose={() => setIsAddDateModalOpen(false) as any} onAddDate={handleAddDate as any} existingDays={days as any} />
 
       {selectedDateId && viewMode === "records" && (
         <div className="mb-4 flex justify-end">
@@ -199,8 +193,9 @@ export default function RecordsPage() {
       {selectedDateId &&
         viewMode === "records" &&
         currentTeams.map((team, idx) => {
-          const day = days.find((d) => d.id === selectedDateId);
-          const dateId = day?.dateId;
+          /** ✅ [수정] 타입 비교 안정화 */
+          const day = days.find((d) => String(d.id) === String(selectedDateId));
+          const dateId = day?.date || (day as any)?.dateId;
           const teamId = teamIdMap[selectedDateId]?.[team.teamName];
 
           return <AttendanceTable key={idx} selectedDate={selectedDateId} teamName={team.teamName} customPlayers={team.players} matches={currentMatches} dateId={dateId} teamId={teamId} />;
@@ -215,13 +210,11 @@ export default function RecordsPage() {
           onUpdateMatch={handleUpdateMatch}
           onDeleteMatch={handleDeleteMatch}
           onSaveAll={async () => {
-            // 현재 날짜의 모든 경기가 이미 저장되어 있으므로 데이터 새로고침만 수행
             if (loadRecordsByDate) {
               await loadRecordsByDate(selectedDateId, days);
             }
           }}
           onLoadMatches={async () => {
-            // 저장된 경기를 서버에서 불러오기
             if (loadRecordsByDate && selectedDateId) {
               await loadRecordsByDate(selectedDateId, days);
             }

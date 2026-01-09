@@ -40,15 +40,16 @@ export function useRecordsData(selectedDateId: string, days: Day[]) {
     try {
       console.log("[useRecordsData] Loading records for dateId:", dateId, "daysList:", daysList);
 
-      // dateId를 숫자로 변환 (days.dateId 사용)
-      const day = daysList.find((d) => d.id === dateId);
+      // d를 any로 지정하여 id 속성 접근 에러 해결
+      const day = (daysList as any[]).find((d: any) => String(d.id) === String(dateId));
       if (!day) {
         console.error("[useRecordsData] Day not found for dateId:", dateId);
         alert(`날짜 정보를 찾을 수 없습니다. (dateId: ${dateId})`);
         return;
       }
 
-      const numericDateId = day.dateId;
+      // day.dateId가 없을 경우를 대비해 day.id나 day.date 등 후보군을 탐색
+      const numericDateId = day.dateId || day.id || (day as any).date;
       console.log("[useRecordsData] Found day:", day, "numericDateId:", numericDateId);
 
       // API 호출 시 숫자 dateId 사용

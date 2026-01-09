@@ -3,9 +3,9 @@
  *
  * 선수 통계를 로드하고 관리하는 로직을 담당합니다.
  *
- * @param {string} selectedDate - 선택된 날짜 ID
+ * @param {string} selectedDate - 선택된 날짜 ID (string, 실제 days의 id는 number임)
  * @param {Array} customPlayers - 커스텀 선수 목록
- * @param {number} dateId - 날짜 ID (숫자)
+ * @param {number} dateId - 날짜 ID (숫자, 직접 주입받거나 undefined)
  * @param {Map<string, number>} playerIdMap - 선수 ID 매핑
  * @param {{ wins: number; draws: number; loses: number }} teamRecord - 팀 승무패 기록
  * @returns {object} 선수 통계 관련 상태 및 함수들
@@ -17,7 +17,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { PlayerStat, AttendanceState, PlayerRecordResponse } from "@/types/playerStats";
 import { getPlayerRecords } from "@/services/recordsService";
-import { days } from "@/data/days";
+import { days, Day } from "@/data/days";
 import { sortPlayerStats, calculateTotalPoint, createPlayerRecordMap } from "@/utils/playerStatsUtils";
 
 export function usePlayerStats(
@@ -45,7 +45,22 @@ export function usePlayerStats(
     abortControllerRef.current = new AbortController();
 
     const loadPlayerStats = async () => {
-      const numericDateId = typeof dateId === "number" ? dateId : days.find((d) => d.id === selectedDate)?.dateId;
+      let numericDateId: number | undefined = undefined;
+
+      // 1. dateId로 우선 사용 (정확함)
+      if (typeof dateId === "number") {
+        numericDateId = dateId;
+      }
+      // 2. days에서 string to number 매칭 (id: number ←→ selectedDate: string)
+      else {
+        // days[].id는 number, selectedDate는 string
+        const foundDay: Day | undefined = days.find((d) => String(d.id) === String(selectedDate));
+        // day.id는 number
+        if (foundDay) {
+          numericDateId = foundDay.id;
+        }
+      }
+      // 3. 못 찾으면 undefined가 유지됨
 
       let playerRecordMap = new Map<number, PlayerRecordResponse>();
       if (typeof numericDateId === "number") {

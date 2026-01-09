@@ -20,8 +20,9 @@ export function useMatchOperations(
     async (match: MatchScore) => {
       if (!selectedDateId) return;
 
-      const selectedDay = days.find((d) => d.id === selectedDateId);
-      if (!selectedDay?.dateId) {
+      // days 타입에서 d.id는 number, selectedDateId는 string이므로 변환 필요
+      const selectedDay = days.find((d) => String(d.id) === selectedDateId);
+      if (!selectedDay?.date) {
         alert("선택한 날짜를 찾을 수 없습니다.");
         return;
       }
@@ -51,20 +52,19 @@ export function useMatchOperations(
 
       // ✅ 날짜 변환: 로컬 날짜를 ISO 형식으로 변환 (타임존 문제 방지)
       const matchDate = (() => {
-        const date = new Date(selectedDay.dateId);
+        // selectedDay.date는 YYYY-MM-DD 또는 비슷한 string일 것임
+        const date = new Date(selectedDay.date);
         if (isNaN(date.getTime())) {
-          console.error("[useMatchOperations] Invalid dateId:", selectedDay.dateId);
+          console.error("[useMatchOperations] Invalid date:", selectedDay.date);
           throw new Error("유효하지 않은 날짜입니다.");
         }
-        // 로컬 날짜를 YYYY-MM-DD 형식으로 변환 후 ISO 형식으로 변환
-        // 타임존 문제를 피하기 위해 로컬 날짜를 사용
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, "0");
         const day = String(date.getDate()).padStart(2, "0");
-        // ISO 형식으로 변환 (로컬 날짜 기준, UTC로 표시)
         const dateString = `${year}-${month}-${day}T00:00:00.000Z`;
         console.log("[useMatchOperations] Date conversion:", {
-          dateId: selectedDay.dateId,
+          date: selectedDay.date,
+          dateId: selectedDay.id,
           localDate: `${year}-${month}-${day}`,
           isoDate: dateString,
           originalISO: date.toISOString(),
@@ -81,7 +81,11 @@ export function useMatchOperations(
       console.log("[useMatchOperations] Current state:", {
         selectedDateId,
         currentMatchesCount: currentMatches.length,
-        currentMatches: currentMatches.map((m) => ({ id: m.id, team1: m.team1Name, team2: m.team2Name })),
+        currentMatches: currentMatches.map((m) => ({
+          id: m.id,
+          team1: m.team1Name,
+          team2: m.team2Name,
+        })),
         team1Id,
         team2Id,
         matchOrder,
@@ -180,8 +184,9 @@ export function useMatchOperations(
 
       console.log("[useMatchOperations] Updating match:", { matchId, match });
 
-      const selectedDay = days.find((d) => d.id === selectedDateId);
-      if (!selectedDay?.dateId) {
+      // days 타입에서 d.id는 number, selectedDateId는 string이므로 변환 필요
+      const selectedDay = days.find((d) => String(d.id) === selectedDateId);
+      if (!selectedDay?.date) {
         alert("선택한 날짜를 찾을 수 없습니다.");
         return;
       }
@@ -206,19 +211,19 @@ export function useMatchOperations(
         return;
       }
 
-      const matchOrder = matchesByDate[selectedDateId]?.findIndex((m) => m.id === matchId)! + 1;
+      const matchOrder = (matchesByDate[selectedDateId]?.findIndex((m) => m.id === matchId) ?? -1) + 1;
+
       // ✅ 날짜 변환: 로컬 날짜를 ISO 형식으로 변환 (타임존 문제 방지)
       const matchDate = (() => {
-        const date = new Date(selectedDay.dateId);
+        // selectedDay.date는 YYYY-MM-DD 또는 비슷한 string일 것임
+        const date = new Date(selectedDay.date);
         if (isNaN(date.getTime())) {
-          console.error("[useMatchOperations] Invalid dateId:", selectedDay.dateId);
+          console.error("[useMatchOperations] Invalid date:", selectedDay.date);
           throw new Error("유효하지 않은 날짜입니다.");
         }
-        // 로컬 날짜를 YYYY-MM-DD 형식으로 변환 후 ISO 형식으로 변환
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, "0");
         const day = String(date.getDate()).padStart(2, "0");
-        // ISO 형식으로 변환 (로컬 날짜 기준, UTC로 표시)
         return `${year}-${month}-${day}T00:00:00.000Z`;
       })();
 
@@ -273,7 +278,7 @@ export function useMatchOperations(
         setIsLoading(false);
       }
     },
-    [selectedDateId, days, teamIdMap, setMatchesByDate, setIsLoading]
+    [selectedDateId, days, teamIdMap, setMatchesByDate, setIsLoading, matchesByDate]
   );
 
   /** =========================
